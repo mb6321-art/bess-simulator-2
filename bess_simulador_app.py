@@ -3,11 +3,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
 
 # --- CONFIGURACIÓN DE LA APP ---
 st.set_page_config(page_title="Simulador BESS - Naturgy", layout="wide")
-st.title("🔋 Simulador de BESS - Naturgy")
+st.markdown("<h1 style='display: inline-block;'>🔋 Simulador de BESS - Naturgy</h1>", unsafe_allow_html=True)
+st.markdown("<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Naturgy_logo.svg/2560px-Naturgy_logo.svg.png' style='height:40px; float: right;'>", unsafe_allow_html=True)
 
 # --- FUNCIÓN PARA CARGAR DATOS DESDE EXCEL ---
 def cargar_datos_excel():
@@ -19,11 +19,10 @@ def cargar_datos_excel():
         st.error(f"❌ Error cargando Excel: {e}")
         return None
 
-# --- FUNCIÓN PARA CARGAR DATOS DE OMIE (SIMULADO) ---
+# --- FUNCIÓN PARA GENERAR DATOS SIMULADOS ---
 @st.cache_data
 def cargar_datos_omie():
     try:
-        # Simulación de descarga (la URL real da error)
         st.warning("🔧 No se pudieron descargar los datos reales de OMIE. Usando datos simulados.")
         fechas = pd.date_range("2024-01-01", periods=24*30, freq="H")
         df = pd.DataFrame({
@@ -55,13 +54,13 @@ if precios is not None and "Fecha" in precios.columns and "Hora" in precios.colu
     ciclos_dia = st.sidebar.slider("Máx. ciclos por día", 1, 5, 1)
     coste_mantenimiento = st.sidebar.number_input("Coste OPEX [€/kW/año]", value=15.0)
 
-    # --- FUNCIÓN DE SIMULACIÓN ---
     def simular(precios, zona, potencia, duracion, ef_in, ef_out):
         df = precios[["Fecha", "Hora", zona]].copy()
         df = df.rename(columns={zona: "Precio"})
         df["Día"] = pd.to_datetime(df["Fecha"]).dt.date
         df["Carga"] = 0.0
         df["Descarga"] = 0.0
+        df["SOC"] = 0.0
         df["Estado"] = ""
 
         energia = potencia * duracion
@@ -88,8 +87,17 @@ if precios is not None and "Fecha" in precios.columns and "Hora" in precios.colu
             if not descargas.empty:
                 descargas = descargas.set_index(["Fecha", "Hora"])
                 resultado_dia.update(descargas)
-
             resultado_dia = resultado_dia.reset_index()
+
+            # Calcular estado de carga (SOC)
+            soc = 0.0
+            soc_list = []
+            for _, row in resultado_dia.iterrows():
+                soc += row["Carga"]
+                soc -= row["Descarga"]
+                soc = min(max(soc, 0), energia)
+                soc_list.append(soc)
+            resultado_dia["SOC"] = soc_list
             df_resultados.append(resultado_dia)
 
         df_final = pd.concat(df_resultados).sort_values(["Fecha", "Hora"])
@@ -113,7 +121,7 @@ if precios is not None and "Fecha" in precios.columns and "Hora" in precios.colu
         total_ingresos = resultado["Ingresos"].sum()
         total_costes = resultado["Costes"].sum()
         total_beneficio = resultado["Beneficio"].sum()
-        capex_estimado = potencia_mw * duracion_h * 400  # €/kWh
+        capex_estimado = potencia_mw * duracion_h * 400
         opex_total = potencia_mw * 1000 * coste_mantenimiento
 
         col1, col2, col3 = st.columns(3)
@@ -125,16 +133,17 @@ if precios is not None and "Fecha" in precios.columns and "Hora" in precios.colu
         fecha_sel = st.date_input("Selecciona un día", value=resultado["Fecha"].min())
         df_dia = resultado[resultado["Fecha"] == pd.to_datetime(fecha_sel)]
 
-        fig, ax1 = plt.subplots(figsize=(12, 4))
+        fig, ax1 = plt.subplots(figsize=(12, 5))
         ax1.plot(df_dia["Hora"], df_dia["Precio"], color="gray", label="Precio [€/MWh]")
         ax1.set_ylabel("Precio [€/MWh]", color="gray")
 
         ax2 = ax1.twinx()
         ax2.bar(df_dia["Hora"], df_dia["Carga"], width=0.4, color="green", label="Carga")
         ax2.bar(df_dia["Hora"] + 0.4, df_dia["Descarga"], width=0.4, color="red", label="Descarga")
+        ax2.plot(df_dia["Hora"], df_dia["SOC"], color="blue", label="SOC (MWh)", linewidth=2)
         ax2.set_ylabel("Energía [MWh]")
 
         fig.legend(loc="upper right")
         st.pyplot(fig)
 
-        st.dataframe(df_dia[["Fecha", "Hora", "Precio", "Carga", "Descarga", "Ingresos", "Costes", "Beneficio"]].round(2))
+        st.dataframe(df_dia[["Fecha", "Hora", "Precio", "Carga", "Descarga", "SOC", "Ingresos", "Costes", "Beneficio"]].round(2))
