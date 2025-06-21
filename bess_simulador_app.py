@@ -94,11 +94,11 @@ if precios is not None and st.sidebar.button("▶️ Ejecutar simulación"):
     df_sim["Beneficio"] = df_sim["Ingresos"] - df_sim["Costes"]
 
     st.subheader("📊 Parámetros seleccionados")
-    st.markdown(f"**Zona:** {zona}  
+    st.markdown(f"""**Zona:** {zona}  
 **Potencia:** {potencia_mw} MW  
 **Duración:** {duracion_h} h  
 **Eficiencias:** carga {ef_carga}%, descarga {ef_descarga}%  
-**OPEX anual:** {coste_opex} €/kW")
+**OPEX anual:** {coste_opex} €/kW""")
 
     # --- CÁLCULO FLUJO DE CAJA Y TIR ---
     ingresos_anuales = df_sim["Ingresos"].sum()
