@@ -1,0 +1,7 @@
+
+streamlit==1.46.0
+pandas
+numpy
+matplotlib
+openpyxl
+requests
