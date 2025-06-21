@@ -5,41 +5,47 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# --- CONFIGURACIÓN INICIAL ---
+# --- CONFIGURACIÓN DE LA APP ---
 st.set_page_config(page_title="Simulador BESS - Naturgy", layout="wide")
 st.title("🔋 Simulador de BESS - Naturgy")
 
-# --- CARGA DE DATOS ---
+# --- FUNCIÓN PARA CARGAR DATOS DESDE EXCEL ---
 def cargar_datos_excel():
-    df = pd.read_excel("precios_estimados_2024.xlsx")
-    df["Fecha"] = pd.to_datetime(df["Fecha"])
-    return df
+    try:
+        df = pd.read_excel("precios_estimados_2024.xlsx")
+        df["Fecha"] = pd.to_datetime(df["Fecha"])
+        return df
+    except Exception as e:
+        st.error(f"❌ Error cargando Excel: {e}")
+        return None
 
+# --- FUNCIÓN PARA CARGAR DATOS DE OMIE (SIMULADO) ---
 @st.cache_data
 def cargar_datos_omie():
     try:
-        url = "https://www.omie.es/sites/default/files/dados/AGNO_2024/INT_PBC_EV_H_1.csv"
-        df = pd.read_csv(url, sep=";", encoding="latin1")
-        df["Fecha"] = pd.to_datetime(df["Fecha"])
-        df["Hora"] = df["Hora"].astype(int)
-        zonas = ["NORTE", "SUR", "CENTRO"]
-        for zona in zonas:
-            df[zona] = df["Precio"]
-        return df[["Fecha", "Hora"] + zonas]
+        # Simulación de descarga (la URL real da error)
+        st.warning("🔧 No se pudieron descargar los datos reales de OMIE. Usando datos simulados.")
+        fechas = pd.date_range("2024-01-01", periods=24*30, freq="H")
+        df = pd.DataFrame({
+            "Fecha": fechas.date,
+            "Hora": fechas.hour,
+            "NORTE": np.random.uniform(20, 150, len(fechas)),
+            "SUR": np.random.uniform(25, 160, len(fechas)),
+            "CENTRO": np.random.uniform(30, 170, len(fechas)),
+        })
+        return df
     except Exception as e:
-        st.error(f"No se pudieron descargar los datos: {e}")
+        st.error(f"No se pudieron generar datos: {e}")
         return None
 
-fuente = st.sidebar.radio("Fuente de precios", ["Excel local", "OMIE (online)"])
-if fuente == "Excel local":
-    precios = cargar_datos_excel()
-else:
-    precios = cargar_datos_omie()
+# --- SELECCIÓN DE FUENTE DE DATOS ---
+fuente = st.sidebar.radio("📊 Fuente de precios", ["Excel local", "OMIE (simulado)"])
+precios = cargar_datos_excel() if fuente == "Excel local" else cargar_datos_omie()
 
-if precios is not None:
+if precios is not None and "Fecha" in precios.columns and "Hora" in precios.columns:
     zona_list = [c for c in precios.columns if c not in ["Fecha", "Hora"]]
 
-    # --- PARÁMETROS ---
+    # --- PARÁMETROS EDITABLES ---
     st.sidebar.header("⚙️ Parámetros del sistema")
     zona = st.sidebar.selectbox("Zona de operación", zona_list)
     potencia_mw = st.sidebar.number_input("Potencia [MW]", min_value=1.0, value=10.0)
@@ -49,11 +55,11 @@ if precios is not None:
     ciclos_dia = st.sidebar.slider("Máx. ciclos por día", 1, 5, 1)
     coste_mantenimiento = st.sidebar.number_input("Coste OPEX [€/kW/año]", value=15.0)
 
-    # --- SIMULACIÓN ---
+    # --- FUNCIÓN DE SIMULACIÓN ---
     def simular(precios, zona, potencia, duracion, ef_in, ef_out):
         df = precios[["Fecha", "Hora", zona]].copy()
         df = df.rename(columns={zona: "Precio"})
-        df["Día"] = df["Fecha"].dt.date
+        df["Día"] = pd.to_datetime(df["Fecha"]).dt.date
         df["Carga"] = 0.0
         df["Descarga"] = 0.0
         df["Estado"] = ""
@@ -75,11 +81,18 @@ if precios is not None:
             descargas["Estado"] = "Descarga"
 
             resultado_dia = grupo.copy()
-            resultado_dia.update(cargas.set_index("Fecha"))
-            resultado_dia.update(descargas.set_index("Fecha"))
+            resultado_dia = resultado_dia.set_index(["Fecha", "Hora"])
+            if not cargas.empty:
+                cargas = cargas.set_index(["Fecha", "Hora"])
+                resultado_dia.update(cargas)
+            if not descargas.empty:
+                descargas = descargas.set_index(["Fecha", "Hora"])
+                resultado_dia.update(descargas)
+
+            resultado_dia = resultado_dia.reset_index()
             df_resultados.append(resultado_dia)
 
-        df_final = pd.concat(df_resultados).sort_values("Fecha")
+        df_final = pd.concat(df_resultados).sort_values(["Fecha", "Hora"])
         df_final["Ingresos"] = df_final["Descarga"] * df_final["Precio"]
         df_final["Costes"] = df_final["Carga"] * df_final["Precio"]
         df_final["Beneficio"] = df_final["Ingresos"] - df_final["Costes"]
@@ -109,8 +122,8 @@ if precios is not None:
         col3.metric("Beneficio neto [€]", f"{total_beneficio - opex_total:,.0f}")
 
         st.header("📅 Análisis horario")
-        fecha_sel = st.date_input("Selecciona un día", value=resultado["Fecha"].dt.date.min())
-        df_dia = resultado[resultado["Fecha"].dt.date == fecha_sel]
+        fecha_sel = st.date_input("Selecciona un día", value=resultado["Fecha"].min())
+        df_dia = resultado[resultado["Fecha"] == pd.to_datetime(fecha_sel)]
 
         fig, ax1 = plt.subplots(figsize=(12, 4))
         ax1.plot(df_dia["Hora"], df_dia["Precio"], color="gray", label="Precio [€/MWh]")
@@ -124,4 +137,4 @@ if precios is not None:
         fig.legend(loc="upper right")
         st.pyplot(fig)
 
-        st.dataframe(df_dia[["Fecha", "Precio", "Carga", "Descarga", "Ingresos", "Costes", "Beneficio"]].round(2))
+        st.dataframe(df_dia[["Fecha", "Hora", "Precio", "Carga", "Descarga", "Ingresos", "Costes", "Beneficio"]].round(2))
