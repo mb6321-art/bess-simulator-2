@@ -15,7 +15,7 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
-        df = pd.read_excel("data/precios_italia.xlsx", sheet_name=zona)
+        df = pd.read_excel("data/precios_italia_2024.xlsx", sheet_name=zona)
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
 
@@ -100,7 +100,10 @@ st.title("🔋 Simulador de BESS")
 with st.sidebar:
     st.header("🔧 Parámetros de simulación")
     archivo = st.file_uploader("Archivo de precios", type=["xlsx", "csv"])
-    zona = st.selectbox("Zona", ["NORTE", "CENTRO_NORTE", "CENTRO_SUD", "SUD"])
+    zona = st.selectbox(
+        "Zona",
+        ["NORD", "CNORD", "CSUD", "SUD", "SARD", "SICILY", "BZ"],
+    )
     potencia_mw = st.slider("Potencia (MW)", 1, 100, 10)
     duracion_h = st.slider("Duración (h)", 1, 10, 4)
     ef_carga = st.slider("Eficiencia de carga (%)", 50, 100, 95) / 100
