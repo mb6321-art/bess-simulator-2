@@ -5,7 +5,6 @@ import numpy_financial as npf
 import plotly.express as px
 import os
 
-
 def reset_sidebar():
     """Clear session state and reload the app."""
     for k in list(st.session_state.keys()):
@@ -151,7 +150,13 @@ with st.sidebar:
         "percentil indicado en 'Umbral de descarga'."
     )
     margen = st.number_input("Margen (€/MWh)", value=10.0)
-    opex_kw = st.number_input("OPEX anual (€/kW)", value=15)
+    opex_kw = st.slider(
+        "OPEX anual (€/kW)",
+        min_value=5.0,
+        max_value=8.0,
+        value=6.5,
+        step=0.1,
+    )
     coste_mwh = st.number_input("Coste operación (€/MWh cargado)", value=0.0)
     tasa_descuento = st.number_input("Tasa de descuento (%)", 0.0, 20.0, 7.0)
 
@@ -205,11 +210,12 @@ if iniciar:
         st.download_button("Descargar resumen mensual (CSV)", csv_m, "resumen_mensual.csv")
 
     with tab_graf:
-        dia = st.date_input(
+        dia = st.slider(
             "Día a visualizar",
-            value=fecha_inicio,
             min_value=fecha_inicio,
             max_value=fecha_fin,
+            value=fecha_inicio,
+            format="YYYY-MM-DD",
             key="dia_graf",
         )
         diario = resultado[resultado["Fecha"].dt.date == pd.to_datetime(dia).date()]
@@ -254,3 +260,4 @@ if iniciar:
         """)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
+
