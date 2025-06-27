@@ -5,6 +5,13 @@ import numpy_financial as npf
 import plotly.express as px
 import os
 
+
+def reset_sidebar():
+    """Clear session state and reload the app."""
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
+    st.experimental_rerun()
+
 TECHS = {
     "Li-ion LFP": {"costo": (220, 240), "ciclos": (6000, 8000)},
     "Li-ion NMC": {"costo": (250, 280), "ciclos": (3000, 4000)},
@@ -149,6 +156,18 @@ with st.sidebar:
     tasa_descuento = st.number_input("Tasa de descuento (%)", 0.0, 20.0, 7.0)
 
     iniciar = st.button("▶️ Ejecutar simulación")
+    if st.button("Restablecer parámetros"):
+        reset_sidebar()
+
+    with st.expander("Ayuda"):
+        st.markdown(
+            """
+            1. Ajusta los parámetros y pulsa **Ejecutar simulación**.
+            2. Usa **Restablecer parámetros** para volver a los valores por defecto.
+            3. En las pestañas de la derecha encontrarás los datos, las gráficas y
+               los indicadores económicos.
+            """
+        )
 
 if iniciar:
     precios = cargar_datos(zona, archivo)
@@ -171,26 +190,32 @@ if iniciar:
                         ef_carga, ef_descarga, estrategia,
                         umbral_carga, umbral_descarga, margen, horario)
 
-    st.subheader("📈 Resultados horarios")
-    st.dataframe(resultado.head(100), use_container_width=True)
-    fig = px.line(resultado, x="Fecha", y=["Precio", "SOC (MWh)"],
-                  title="Precio y Estado de Carga")
-    st.plotly_chart(fig, use_container_width=True)
-
     mensual = resumen_mensual(resultado)
-    st.subheader("📅 Resumen mensual")
-    st.dataframe(mensual, use_container_width=True)
 
-    csv = resultado.to_csv(index=False).encode("utf-8")
-    st.download_button("Descargar resultados (CSV)", csv, "resultados_bess.csv")
-    csv_m = mensual.to_csv().encode("utf-8")
-    st.download_button("Descargar resumen mensual (CSV)",
-                       csv_m, "resumen_mensual.csv")
+    tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
+
+    with tab_res:
+        st.subheader("📈 Resultados horarios")
+        st.dataframe(resultado.head(100), use_container_width=True)
+        st.subheader("📅 Resumen mensual")
+        st.dataframe(mensual, use_container_width=True)
+        csv = resultado.to_csv(index=False).encode("utf-8")
+        st.download_button("Descargar resultados (CSV)", csv, "resultados_bess.csv")
+        csv_m = mensual.to_csv().encode("utf-8")
+        st.download_button("Descargar resumen mensual (CSV)", csv_m, "resumen_mensual.csv")
+
+    with tab_graf:
+        fig = px.line(resultado, x="Fecha", y=["Precio", "SOC (MWh)"], title="Precio y Estado de Carga")
+        st.plotly_chart(fig, use_container_width=True)
+        fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
+        st.plotly_chart(fig_b, use_container_width=True)
+        cash = -potencia_mw * 1000 * capex_kw + resultado["Beneficio (€)"].cumsum()
+        fig_cash = px.line(x=resultado["Fecha"], y=cash, labels={"x": "Fecha", "y": "€"}, title="Flujo de caja acumulado")
+        st.plotly_chart(fig_cash, use_container_width=True)
 
     ingreso_anual = resultado["Beneficio (€)"].sum()
     inversion = -potencia_mw * 1000 * capex_kw
-    flujo_caja = [inversion] + \
-        [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
+    flujo_caja = [inversion] + [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
     van = npf.npv(tasa_descuento / 100, flujo_caja)
     tir = npf.irr(flujo_caja)
 
@@ -199,13 +224,15 @@ if iniciar:
     dias_periodo = (fecha_fin - fecha_inicio).days + 1
     ciclos_anuales = ciclos_periodo / (dias_periodo / 365)
 
-    st.subheader("📊 Indicadores económicos")
-    st.markdown(f"""
-    - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
-    - **Inversión inicial**: {inversion:,.0f} €
-    - **VAN (15 años)**: {van:,.0f} €
-    - **TIR estimada**: {tir*100:.2f} %
-    - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
-    """)
+    with tab_ind:
+        st.subheader("📊 Indicadores económicos")
+        st.markdown(f"""
+        - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
+        - **Inversión inicial**: {inversion:,.0f} €
+        - **VAN (15 años)**: {van:,.0f} €
+        - **TIR estimada**: {tir*100:.2f} %
+        - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+        """)
+
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
