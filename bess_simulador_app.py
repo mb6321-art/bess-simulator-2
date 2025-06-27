@@ -5,6 +5,19 @@ import numpy_financial as npf
 import plotly.express as px
 import os
 
+RESULT_KEYS = [
+    "resultado",
+    "mensual",
+    "fi_date",
+    "ff_date",
+    "ingreso_anual",
+    "inversion",
+    "van",
+    "tir",
+    "ciclos_anuales",
+    "cyc_min",
+    "cyc_max",
+]
 
 def reset_sidebar():
     """Clear session state and reload the app."""
@@ -19,6 +32,10 @@ TECHS = {
 }
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
+
+# Initialize session state variables for results
+for k in RESULT_KEYS:
+    st.session_state.setdefault(k, None)
 
 # --- Cargar datos ---
 @st.cache_data
@@ -141,10 +158,8 @@ with st.sidebar:
     ef_carga = st.slider("Eficiencia de carga (%)", 50, 100, 95) / 100
     ef_descarga = st.slider("Eficiencia de descarga (%)", 50, 100, 95) / 100
 
-    estrategia = st.selectbox(
-        "Estrategia",
-        ["Percentiles", "Margen fijo", "Programada"]
-    )
+    estrategia = st.selectbox("Estrategia",
+                              ["Percentiles", "Margen fijo", "Programada"])
     umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
     umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
     st.caption(
@@ -196,11 +211,47 @@ if iniciar:
             df_hor = pd.read_csv(horario_file)
             horario = {row["hora"]: row["accion"] for _, row in df_hor.iterrows()}
 
-    resultado = simular(precios, potencia_mw, duracion_h,
-                        ef_carga, ef_descarga, estrategia,
-                        umbral_carga, umbral_descarga, margen, horario)
+    resultado = simular(
+        precios,
+        potencia_mw,
+        duracion_h,
+        ef_carga,
+        ef_descarga,
+        estrategia,
+        umbral_carga,
+        umbral_descarga,
+        margen,
+        horario,
+    )
 
     mensual = resumen_mensual(resultado)
+
+    ingreso_anual = resultado["Beneficio (€)"].sum()
+    inversion = -potencia_mw * 1000 * capex_kw
+    flujo_caja = [inversion] + [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
+    van = npf.npv(tasa_descuento / 100, flujo_caja)
+    tir = npf.irr(flujo_caja)
+
+    total_descarga = resultado["Descarga (MWh)"].sum()
+    ciclos_periodo = total_descarga / (potencia_mw * duracion_h)
+    dias_periodo = (fecha_fin - fecha_inicio).days + 1
+    ciclos_anuales = ciclos_periodo / (dias_periodo / 365)
+
+    st.session_state.update(
+        {
+            "resultado": resultado,
+            "mensual": mensual,
+            "fi_date": fi_date,
+            "ff_date": ff_date,
+            "ingreso_anual": ingreso_anual,
+            "inversion": inversion,
+            "van": van,
+            "tir": tir,
+            "ciclos_anuales": ciclos_anuales,
+            "cyc_min": cyc_min,
+            "cyc_max": cyc_max,
+        }
+    )
 
     tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
 
@@ -219,7 +270,7 @@ if iniciar:
             "Día a visualizar",
             min_value=fi_date,
             max_value=ff_date,
-            value=fi_date,
+            value=st.session_state.get("dia_graf", fi_date),
             format="YYYY-MM-DD",
             key="dia_graf",
         )
@@ -243,25 +294,81 @@ if iniciar:
         fig_cash = px.line(x=resultado["Fecha"], y=cash, labels={"x": "Fecha", "y": "€"}, title="Flujo de caja acumulado")
         st.plotly_chart(fig_cash, use_container_width=True)
 
-    ingreso_anual = resultado["Beneficio (€)"].sum()
-    inversion = -potencia_mw * 1000 * capex_kw
-    flujo_caja = [inversion] + [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
-    van = npf.npv(tasa_descuento / 100, flujo_caja)
-    tir = npf.irr(flujo_caja)
-
-    total_descarga = resultado["Descarga (MWh)"].sum()
-    ciclos_periodo = total_descarga / (potencia_mw * duracion_h)
-    dias_periodo = (fecha_fin - fecha_inicio).days + 1
-    ciclos_anuales = ciclos_periodo / (dias_periodo / 365)
-
     with tab_ind:
         st.subheader("📊 Indicadores económicos")
-        st.markdown(f"""
+        st.markdown(
+            f"""
         - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
         - **Inversión inicial**: {inversion:,.0f} €
         - **VAN (15 años)**: {van:,.0f} €
         - **TIR estimada**: {tir*100:.2f} %
         - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
-        """)
+        """
+        )
+elif st.session_state["resultado"] is not None:
+    resultado = st.session_state["resultado"]
+    mensual = st.session_state["mensual"]
+    fi_date = st.session_state["fi_date"]
+    ff_date = st.session_state["ff_date"]
+    ingreso_anual = st.session_state["ingreso_anual"]
+    inversion = st.session_state["inversion"]
+    van = st.session_state["van"]
+    tir = st.session_state["tir"]
+    ciclos_anuales = st.session_state["ciclos_anuales"]
+    cyc_min = st.session_state["cyc_min"]
+    cyc_max = st.session_state["cyc_max"]
+
+    tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
+
+    with tab_res:
+        st.subheader("📈 Resultados horarios")
+        st.dataframe(resultado.head(100), use_container_width=True)
+        st.subheader("📅 Resumen mensual")
+        st.dataframe(mensual, use_container_width=True)
+        csv = resultado.to_csv(index=False).encode("utf-8")
+        st.download_button("Descargar resultados (CSV)", csv, "resultados_bess.csv")
+        csv_m = mensual.to_csv().encode("utf-8")
+        st.download_button("Descargar resumen mensual (CSV)", csv_m, "resumen_mensual.csv")
+
+    with tab_graf:
+        dia = st.slider(
+            "Día a visualizar",
+            min_value=fi_date,
+            max_value=ff_date,
+            value=st.session_state.get("dia_graf", fi_date),
+            format="YYYY-MM-DD",
+            key="dia_graf",
+        )
+        diario = resultado[resultado["Fecha"].dt.date == dia]
+        if not diario.empty:
+            fig_d = px.line(
+                diario,
+                x="Fecha",
+                y=["Precio", "SOC (MWh)"],
+                title=f"Precio y SOC - {dia}",
+            )
+            st.plotly_chart(fig_d, use_container_width=True)
+        else:
+            st.info("No hay datos para ese día")
+
+        fig = px.line(resultado, x="Fecha", y=["Precio", "SOC (MWh)"], title="Precio y Estado de Carga")
+        st.plotly_chart(fig, use_container_width=True)
+        fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
+        st.plotly_chart(fig_b, use_container_width=True)
+        cash = -potencia_mw * 1000 * capex_kw + resultado["Beneficio (€)"].cumsum()
+        fig_cash = px.line(x=resultado["Fecha"], y=cash, labels={"x": "Fecha", "y": "€"}, title="Flujo de caja acumulado")
+        st.plotly_chart(fig_cash, use_container_width=True)
+
+    with tab_ind:
+        st.subheader("📊 Indicadores económicos")
+        st.markdown(
+            f"""
+        - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
+        - **Inversión inicial**: {inversion:,.0f} €
+        - **VAN (15 años)**: {van:,.0f} €
+        - **TIR estimada**: {tir*100:.2f} %
+        - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+        """
+        )
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
