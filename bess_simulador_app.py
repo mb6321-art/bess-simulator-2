@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import numpy_financial as npf
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import os
 
 RESULT_KEYS = [
@@ -158,8 +160,10 @@ with st.sidebar:
     ef_carga = st.slider("Eficiencia de carga (%)", 50, 100, 95) / 100
     ef_descarga = st.slider("Eficiencia de descarga (%)", 50, 100, 95) / 100
 
-    estrategia = st.selectbox("Estrategia",
-                              ["Percentiles", "Margen fijo", "Programada"])
+    estrategia = st.selectbox(
+        "Estrategia",
+        ["Percentiles", "Margen fijo", "Programada"]
+    )
     umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
     umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
     st.caption(
@@ -276,17 +280,34 @@ if iniciar:
         )
         diario = resultado[resultado["Fecha"].dt.date == dia]
         if not diario.empty:
-            fig_d = px.line(
-                diario,
-                x="Fecha",
-                y=["Precio", "SOC (MWh)"],
-                title=f"Precio y SOC - {dia}",
+            fig_d = make_subplots(specs=[[{"secondary_y": True}]])
+            fig_d.add_trace(
+                go.Scatter(x=diario["Fecha"], y=diario["Precio"], name="Precio"),
+                secondary_y=False,
             )
+            fig_d.add_trace(
+                go.Scatter(x=diario["Fecha"], y=diario["SOC (MWh)"], name="SOC (MWh)"),
+                secondary_y=True,
+            )
+            fig_d.update_layout(title=f"Precio y SOC - {dia}")
+            fig_d.update_yaxes(title_text="Precio", secondary_y=False)
+            fig_d.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
             st.plotly_chart(fig_d, use_container_width=True)
         else:
             st.info("No hay datos para ese día")
 
-        fig = px.line(resultado, x="Fecha", y=["Precio", "SOC (MWh)"], title="Precio y Estado de Carga")
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(
+            go.Scatter(x=resultado["Fecha"], y=resultado["Precio"], name="Precio"),
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(x=resultado["Fecha"], y=resultado["SOC (MWh)"], name="SOC (MWh)"),
+            secondary_y=True,
+        )
+        fig.update_layout(title="Precio y Estado de Carga")
+        fig.update_yaxes(title_text="Precio", secondary_y=False)
+        fig.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
         st.plotly_chart(fig, use_container_width=True)
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
         st.plotly_chart(fig_b, use_container_width=True)
@@ -341,17 +362,34 @@ elif st.session_state["resultado"] is not None:
         )
         diario = resultado[resultado["Fecha"].dt.date == dia]
         if not diario.empty:
-            fig_d = px.line(
-                diario,
-                x="Fecha",
-                y=["Precio", "SOC (MWh)"],
-                title=f"Precio y SOC - {dia}",
+            fig_d = make_subplots(specs=[[{"secondary_y": True}]])
+            fig_d.add_trace(
+                go.Scatter(x=diario["Fecha"], y=diario["Precio"], name="Precio"),
+                secondary_y=False,
             )
+            fig_d.add_trace(
+                go.Scatter(x=diario["Fecha"], y=diario["SOC (MWh)"], name="SOC (MWh)"),
+                secondary_y=True,
+            )
+            fig_d.update_layout(title=f"Precio y SOC - {dia}")
+            fig_d.update_yaxes(title_text="Precio", secondary_y=False)
+            fig_d.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
             st.plotly_chart(fig_d, use_container_width=True)
         else:
             st.info("No hay datos para ese día")
 
-        fig = px.line(resultado, x="Fecha", y=["Precio", "SOC (MWh)"], title="Precio y Estado de Carga")
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(
+            go.Scatter(x=resultado["Fecha"], y=resultado["Precio"], name="Precio"),
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(x=resultado["Fecha"], y=resultado["SOC (MWh)"], name="SOC (MWh)"),
+            secondary_y=True,
+        )
+        fig.update_layout(title="Precio y Estado de Carga")
+        fig.update_yaxes(title_text="Precio", secondary_y=False)
+        fig.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
         st.plotly_chart(fig, use_container_width=True)
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
         st.plotly_chart(fig_b, use_container_width=True)
