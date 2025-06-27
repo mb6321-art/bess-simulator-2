@@ -22,7 +22,7 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
-        path = "data/precios_italia_2024.xlsx"
+        path = "Precio_Mercado_Italiano_2024.xlsx"
         if not os.path.exists(path):
             alt_path = "data/precios_italia.xlsx"
             if os.path.exists(alt_path):
@@ -138,6 +138,11 @@ with st.sidebar:
                               ["Percentiles", "Margen fijo", "Programada"])
     umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
     umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
+    st.caption(
+        "La batería se carga cuando el precio está por debajo del percentil "
+        "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+        "percentil indicado en 'Umbral de descarga'."
+    )
     margen = st.number_input("Margen (€/MWh)", value=10.0)
     opex_kw = st.number_input("OPEX anual (€/kW)", value=15)
     coste_mwh = st.number_input("Coste operación (€/MWh cargado)", value=0.0)
@@ -204,3 +209,4 @@ if iniciar:
     """)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
+
