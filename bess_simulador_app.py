@@ -22,7 +22,7 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
-        path = "Precio_Mercado_Italiano_2024.xlsx"
+        path = "Precios_Mercado_Italiano_2024.xlsx"
         if not os.path.exists(path):
             alt_path = "data/precios_italia.xlsx"
             if os.path.exists(alt_path):
