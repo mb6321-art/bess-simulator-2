@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import numpy_financial as npf
 import plotly.express as px
+import os
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
@@ -15,7 +16,15 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
-        df = pd.read_excel("data/precios_italia_2024.xlsx", sheet_name=zona)
+        path = "data/precios_italia_2024.xlsx"
+        if not os.path.exists(path):
+            alt_path = "data/precios_italia.xlsx"
+            if os.path.exists(alt_path):
+                path = alt_path
+            else:
+                st.error(f"Archivo predeterminado no encontrado: {path}")
+                st.stop()
+        df = pd.read_excel(path, sheet_name=zona)
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
 
