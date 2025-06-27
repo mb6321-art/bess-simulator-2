@@ -16,9 +16,9 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
-        path = "data/precios_italia_2024.xlsx"
+        path = "precios_italia_2024.xlsx"
         if not os.path.exists(path):
-            alt_path = "data/precios_italia.xlsx"
+            alt_path = "precios_italia.xlsx"
             if os.path.exists(alt_path):
                 path = alt_path
             else:
