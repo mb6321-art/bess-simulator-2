@@ -5,6 +5,7 @@ import numpy_financial as npf
 import plotly.express as px
 import os
 
+
 def reset_sidebar():
     """Clear session state and reload the app."""
     for k in list(st.session_state.keys()):
@@ -260,4 +261,3 @@ if iniciar:
         """)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
-
