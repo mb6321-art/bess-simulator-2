@@ -141,8 +141,10 @@ with st.sidebar:
     ef_carga = st.slider("Eficiencia de carga (%)", 50, 100, 95) / 100
     ef_descarga = st.slider("Eficiencia de descarga (%)", 50, 100, 95) / 100
 
-    estrategia = st.selectbox("Estrategia",
-                              ["Percentiles", "Margen fijo", "Programada"])
+    estrategia = st.selectbox(
+        "Estrategia",
+        ["Percentiles", "Margen fijo", "Programada"]
+    )
     umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
     umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
     st.caption(
@@ -183,6 +185,8 @@ if iniciar:
     fecha_fin = pd.to_datetime(fecha_fin)
     precios = precios[(precios["Fecha"] >= fecha_inicio) &
                       (precios["Fecha"] <= fecha_fin)]
+    fi_date = fecha_inicio.date()
+    ff_date = fecha_fin.date()
 
     horario = None
     if estrategia == "Programada":
@@ -213,13 +217,13 @@ if iniciar:
     with tab_graf:
         dia = st.slider(
             "Día a visualizar",
-            min_value=fecha_inicio,
-            max_value=fecha_fin,
-            value=fecha_inicio,
+            min_value=fi_date,
+            max_value=ff_date,
+            value=fi_date,
             format="YYYY-MM-DD",
             key="dia_graf",
         )
-        diario = resultado[resultado["Fecha"].dt.date == pd.to_datetime(dia).date()]
+        diario = resultado[resultado["Fecha"].dt.date == dia]
         if not diario.empty:
             fig_d = px.line(
                 diario,
