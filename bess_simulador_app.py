@@ -15,6 +15,7 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
+        df = pd.read_excel("data/precios_italia.xlsx", sheet_name=zona)
         df = pd.read_excel("data/precios_italia_2024.xlsx", sheet_name=zona)
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
@@ -41,40 +42,7 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
                 carga = potencia_mw * ef_carga
                 capacidad_actual += carga
                 estado = "Carga"
-                ingreso = -precio * carga
-            elif precio > p_sup and capacidad_actual > 0:
-                descarga = min(potencia_mw * ef_descarga, capacidad_actual)
-                capacidad_actual -= descarga
-                estado = "Descarga"
-                ingreso = precio * descarga
-
-        elif estrategia == "Margen fijo":
-            if precio < media - margen and capacidad_actual < energia_mwh:
-                carga = potencia_mw * ef_carga
-                capacidad_actual += carga
-                estado = "Carga"
-                ingreso = -precio * carga
-            elif precio > media + margen and capacidad_actual > 0:
-                descarga = min(potencia_mw * ef_descarga, capacidad_actual)
-                capacidad_actual -= descarga
-                estado = "Descarga"
-                ingreso = precio * descarga
-
-        elif estrategia == "Programada" and horario is not None:
-            accion = horario.get(row["Fecha"].hour)
-            if accion == "C" and capacidad_actual < energia_mwh:
-                carga = potencia_mw * ef_carga
-                capacidad_actual += carga
-                estado = "Carga"
-                ingreso = -precio * carga
-            elif accion == "D" and capacidad_actual > 0:
-                descarga = min(potencia_mw * ef_descarga, capacidad_actual)
-                capacidad_actual -= descarga
-                estado = "Descarga"
-                ingreso = precio * descarga
-
-        resultados.append({
-            "Fecha": row["Fecha"],
+@@ -78,73 +78,78 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
             "Precio": precio,
             "Carga (MWh)": carga,
             "Descarga (MWh)": descarga,
@@ -100,6 +68,7 @@ st.title("🔋 Simulador de BESS")
 with st.sidebar:
     st.header("🔧 Parámetros de simulación")
     archivo = st.file_uploader("Archivo de precios", type=["xlsx", "csv"])
+    zona = st.selectbox("Zona", ["NORTE", "CENTRO_NORTE", "CENTRO_SUD", "SUD"])
     zona = st.selectbox(
         "Zona",
         ["NORD", "CNORD", "CSUD", "SUD", "SARD", "SICILY", "BZ"],
@@ -126,6 +95,8 @@ if iniciar:
     precios = cargar_datos(zona, archivo)
     fecha_inicio = st.date_input("Desde", precios["Fecha"].min())
     fecha_fin = st.date_input("Hasta", precios["Fecha"].max())
+    fecha_inicio = pd.to_datetime(fecha_inicio)
+    fecha_fin = pd.to_datetime(fecha_fin)
     precios = precios[(precios["Fecha"] >= fecha_inicio) &
                       (precios["Fecha"] <= fecha_fin)]
 
@@ -150,26 +121,3 @@ if iniciar:
     mensual = resumen_mensual(resultado)
     st.subheader("📅 Resumen mensual")
     st.dataframe(mensual, use_container_width=True)
-
-    csv = resultado.to_csv(index=False).encode("utf-8")
-    st.download_button("Descargar resultados (CSV)", csv, "resultados_bess.csv")
-    csv_m = mensual.to_csv().encode("utf-8")
-    st.download_button("Descargar resumen mensual (CSV)",
-                       csv_m, "resumen_mensual.csv")
-
-    ingreso_anual = resultado["Beneficio (€)"].sum()
-    inversion = -potencia_mw * 1000 * capex_kw
-    flujo_caja = [inversion] + \
-        [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
-    van = npf.npv(tasa_descuento / 100, flujo_caja)
-    tir = npf.irr(flujo_caja)
-
-    st.subheader("📊 Indicadores económicos")
-    st.markdown(f"""
-    - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
-    - **Inversión inicial**: {inversion:,.0f} €
-    - **VAN (15 años)**: {van:,.0f} €
-    - **TIR estimada**: {tir*100:.2f} %
-    """)
-else:
-    st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
