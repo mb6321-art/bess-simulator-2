@@ -209,4 +209,3 @@ if iniciar:
     """)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
-
