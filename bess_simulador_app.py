@@ -205,6 +205,25 @@ if iniciar:
         st.download_button("Descargar resumen mensual (CSV)", csv_m, "resumen_mensual.csv")
 
     with tab_graf:
+        dia = st.date_input(
+            "Día a visualizar",
+            value=fecha_inicio,
+            min_value=fecha_inicio,
+            max_value=fecha_fin,
+            key="dia_graf",
+        )
+        diario = resultado[resultado["Fecha"].dt.date == pd.to_datetime(dia).date()]
+        if not diario.empty:
+            fig_d = px.line(
+                diario,
+                x="Fecha",
+                y=["Precio", "SOC (MWh)"],
+                title=f"Precio y SOC - {dia}",
+            )
+            st.plotly_chart(fig_d, use_container_width=True)
+        else:
+            st.info("No hay datos para ese día")
+
         fig = px.line(resultado, x="Fecha", y=["Precio", "SOC (MWh)"], title="Precio y Estado de Carga")
         st.plotly_chart(fig, use_container_width=True)
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
@@ -233,6 +252,5 @@ if iniciar:
         - **TIR estimada**: {tir*100:.2f} %
         - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
         """)
-
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
