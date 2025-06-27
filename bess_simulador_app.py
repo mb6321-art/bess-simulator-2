@@ -5,6 +5,12 @@ import numpy_financial as npf
 import plotly.express as px
 import os
 
+TECHS = {
+    "Li-ion LFP": {"costo": (220, 240), "ciclos": (6000, 8000)},
+    "Li-ion NMC": {"costo": (250, 280), "ciclos": (3000, 4000)},
+    "Sodio-ion (Na-ion)": {"costo": (280, 320), "ciclos": (4000, 5000)},
+}
+
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
 # --- Cargar datos ---
@@ -16,9 +22,9 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
-        path = "Precios_Mercado_Italiano_2024.xlsx"
+        path = "data/precios_italia_2024.xlsx"
         if not os.path.exists(path):
-            alt_path = "precios_italia.xlsx"
+            alt_path = "data/precios_italia.xlsx"
             if os.path.exists(alt_path):
                 path = alt_path
             else:
@@ -113,6 +119,16 @@ with st.sidebar:
         "Zona",
         ["NORD", "CNORD", "CSUD", "SUD", "SARD", "SICILY", "BZ"],
     )
+    tecnologia = st.selectbox("Tecnología", list(TECHS.keys()))
+    cap_min, cap_max = TECHS[tecnologia]["costo"]
+    cyc_min, cyc_max = TECHS[tecnologia]["ciclos"]
+    capex_kw = st.slider(
+        "CAPEX (€/kW)",
+        min_value=cap_min,
+        max_value=cap_max,
+        value=(cap_min + cap_max) // 2,
+    )
+    st.caption(f"Vida útil estimada: {cyc_min:,}-{cyc_max:,} ciclos")
     potencia_mw = st.slider("Potencia (MW)", 1, 100, 10)
     duracion_h = st.slider("Duración (h)", 1, 10, 4)
     ef_carga = st.slider("Eficiencia de carga (%)", 50, 100, 95) / 100
@@ -123,8 +139,6 @@ with st.sidebar:
     umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
     umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
     margen = st.number_input("Margen (€/MWh)", value=10.0)
-
-    capex_kw = st.number_input("CAPEX (€/kW)", value=600)
     opex_kw = st.number_input("OPEX anual (€/kW)", value=15)
     coste_mwh = st.number_input("Coste operación (€/MWh cargado)", value=0.0)
     tasa_descuento = st.number_input("Tasa de descuento (%)", 0.0, 20.0, 7.0)
@@ -175,12 +189,18 @@ if iniciar:
     van = npf.npv(tasa_descuento / 100, flujo_caja)
     tir = npf.irr(flujo_caja)
 
+    total_descarga = resultado["Descarga (MWh)"].sum()
+    ciclos_periodo = total_descarga / (potencia_mw * duracion_h)
+    dias_periodo = (fecha_fin - fecha_inicio).days + 1
+    ciclos_anuales = ciclos_periodo / (dias_periodo / 365)
+
     st.subheader("📊 Indicadores económicos")
     st.markdown(f"""
     - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
     - **Inversión inicial**: {inversion:,.0f} €
     - **VAN (15 años)**: {van:,.0f} €
     - **TIR estimada**: {tir*100:.2f} %
+    - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
     """)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
