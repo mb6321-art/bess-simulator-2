@@ -5,6 +5,7 @@ import numpy_financial as npf
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import textwrap
 import os
 
 RESULT_KEYS = [
@@ -49,14 +50,18 @@ def cargar_datos(zona, archivo=None):
             df = pd.read_excel(archivo)
     else:
         df = pd.read_excel("data/precios_italia.xlsx", sheet_name=zona)
-        path = "data/precios_italia_2024.xlsx"
+        path = "Precios_Mercado_Italiano_2024.xlsx"
         if not os.path.exists(path):
-            alt_path = "data/precios_italia.xlsx"
+            alt_path = "data/precios_italia_2024.xlsx"
             if os.path.exists(alt_path):
                 path = alt_path
             else:
-                st.error(f"Archivo predeterminado no encontrado: {path}")
-                st.stop()
+                alt_path2 = "data/precios_italia.xlsx"
+                if os.path.exists(alt_path2):
+                    path = alt_path2
+                else:
+                    st.error(f"Archivo predeterminado no encontrado: {path}")
+                    st.stop()
         df = pd.read_excel(path, sheet_name=zona)
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
@@ -83,7 +88,7 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
                 carga = potencia_mw * ef_carga
                 capacidad_actual += carga
                 estado = "Carga"
-@@ -78,95 +119,292 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
+@@ -78,95 +124,294 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
             "Precio": precio,
             "Carga (MWh)": carga,
             "Descarga (MWh)": descarga,
@@ -313,15 +318,16 @@ if iniciar:
 
     with tab_ind:
         st.subheader("📊 Indicadores económicos")
-        st.markdown(
+        info_text = textwrap.dedent(
             f"""
-        - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
-        - **Inversión inicial**: {inversion:,.0f} €
-        - **VAN (15 años)**: {van:,.0f} €
-        - **TIR estimada**: {tir*100:.2f} %
-        - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
-        """
+            - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
+            - **Inversión inicial**: {inversion:,.0f} €
+            - **VAN (15 años)**: {van:,.0f} €
+            - **TIR estimada**: {tir*100:.2f} %
+            - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+            """
         )
+        st.markdown(info_text)
 elif st.session_state["resultado"] is not None:
     resultado = st.session_state["resultado"]
     mensual = st.session_state["mensual"]
@@ -395,14 +401,15 @@ elif st.session_state["resultado"] is not None:
 
     with tab_ind:
         st.subheader("📊 Indicadores económicos")
-        st.markdown(
+        info_text = textwrap.dedent(
             f"""
-        - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
-        - **Inversión inicial**: {inversion:,.0f} €
-        - **VAN (15 años)**: {van:,.0f} €
-        - **TIR estimada**: {tir*100:.2f} %
-        - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
-        """
+            - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
+            - **Inversión inicial**: {inversion:,.0f} €
+            - **VAN (15 años)**: {van:,.0f} €
+            - **TIR estimada**: {tir*100:.2f} %
+            - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+            """
         )
+        st.markdown(info_text)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
