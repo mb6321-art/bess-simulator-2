@@ -23,7 +23,7 @@ RESULT_KEYS = [
 ]
 
 def reset_sidebar():
-    """Clear session state and reload the app."""
+    """Borra el estado de la sesión y recarga la app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -36,7 +36,7 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Initialize session state variables for results
+# Iniciar variables de sesión para conservar resultados
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
@@ -49,7 +49,6 @@ def cargar_datos(zona, archivo=None):
         else:
             df = pd.read_excel(archivo)
     else:
-        df = pd.read_excel("data/precios_italia.xlsx", sheet_name=zona)
         path = "Precios_Mercado_Italiano_2024.xlsx"
         if not os.path.exists(path):
             alt_path = "data/precios_italia_2024.xlsx"
@@ -88,7 +87,40 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
                 carga = potencia_mw * ef_carga
                 capacidad_actual += carga
                 estado = "Carga"
-@@ -78,95 +124,294 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
+                ingreso = -precio * carga
+            elif precio > p_sup and capacidad_actual > 0:
+                descarga = min(potencia_mw * ef_descarga, capacidad_actual)
+                capacidad_actual -= descarga
+                estado = "Descarga"
+                ingreso = precio * descarga
+
+        elif estrategia == "Margen fijo":
+            if precio < media - margen and capacidad_actual < energia_mwh:
+                carga = potencia_mw * ef_carga
+                capacidad_actual += carga
+                estado = "Carga"
+                ingreso = -precio * carga
+            elif precio > media + margen and capacidad_actual > 0:
+                descarga = min(potencia_mw * ef_descarga, capacidad_actual)
+                capacidad_actual -= descarga
+                estado = "Descarga"
+                ingreso = precio * descarga
+
+        elif estrategia == "Programada" and horario is not None:
+            accion = horario.get(row["Fecha"].hour)
+            if accion == "C" and capacidad_actual < energia_mwh:
+                carga = potencia_mw * ef_carga
+                capacidad_actual += carga
+                estado = "Carga"
+                ingreso = -precio * carga
+            elif accion == "D" and capacidad_actual > 0:
+                descarga = min(potencia_mw * ef_descarga, capacidad_actual)
+                capacidad_actual -= descarga
+                estado = "Descarga"
+                ingreso = precio * descarga
+
+        resultados.append({
+            "Fecha": row["Fecha"],
             "Precio": precio,
             "Carga (MWh)": carga,
             "Descarga (MWh)": descarga,
@@ -114,7 +146,6 @@ st.title("🔋 Simulador de BESS")
 with st.sidebar:
     st.header("🔧 Parámetros de simulación")
     archivo = st.file_uploader("Archivo de precios", type=["xlsx", "csv"])
-    zona = st.selectbox("Zona", ["NORTE", "CENTRO_NORTE", "CENTRO_SUD", "SUD"])
     zona = st.selectbox(
         "Zona",
         ["NORD", "CNORD", "CSUD", "SUD", "SARD", "SICILY", "BZ"],
@@ -144,9 +175,6 @@ with st.sidebar:
         "percentil indicado en 'Umbral de descarga'."
     )
     margen = st.number_input("Margen (€/MWh)", value=10.0)
-
-    capex_kw = st.number_input("CAPEX (€/kW)", value=600)
-    opex_kw = st.number_input("OPEX anual (€/kW)", value=15)
     opex_kw = st.slider(
         "OPEX anual (€/kW)",
         min_value=5.0,
@@ -190,15 +218,6 @@ if iniciar:
             df_hor = pd.read_csv(horario_file)
             horario = {row["hora"]: row["accion"] for _, row in df_hor.iterrows()}
 
-    resultado = simular(precios, potencia_mw, duracion_h,
-                        ef_carga, ef_descarga, estrategia,
-                        umbral_carga, umbral_descarga, margen, horario)
-
-    st.subheader("📈 Resultados horarios")
-    st.dataframe(resultado.head(100), use_container_width=True)
-    fig = px.line(resultado, x="Fecha", y=["Precio", "SOC (MWh)"],
-                  title="Precio y Estado de Carga")
-    st.plotly_chart(fig, use_container_width=True)
     resultado = simular(
         precios,
         potencia_mw,
@@ -213,30 +232,13 @@ if iniciar:
     )
 
     mensual = resumen_mensual(resultado)
-    st.subheader("📅 Resumen mensual")
-    st.dataframe(mensual, use_container_width=True)
-
-    csv = resultado.to_csv(index=False).encode("utf-8")
-    st.download_button("Descargar resultados (CSV)", csv, "resultados_bess.csv")
-    csv_m = mensual.to_csv().encode("utf-8")
-    st.download_button("Descargar resumen mensual (CSV)",
-                       csv_m, "resumen_mensual.csv")
 
     ingreso_anual = resultado["Beneficio (€)"].sum()
     inversion = -potencia_mw * 1000 * capex_kw
-    flujo_caja = [inversion] + \
-        [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
     flujo_caja = [inversion] + [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
     van = npf.npv(tasa_descuento / 100, flujo_caja)
     tir = npf.irr(flujo_caja)
 
-    st.subheader("📊 Indicadores económicos")
-    st.markdown(f"""
-    - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
-    - **Inversión inicial**: {inversion:,.0f} €
-    - **VAN (15 años)**: {van:,.0f} €
-    - **TIR estimada**: {tir*100:.2f} %
-    """)
     total_descarga = resultado["Descarga (MWh)"].sum()
     ciclos_periodo = total_descarga / (potencia_mw * duracion_h)
     dias_periodo = (fecha_fin - fecha_inicio).days + 1
