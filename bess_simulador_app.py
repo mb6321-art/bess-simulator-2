@@ -23,7 +23,7 @@ RESULT_KEYS = [
 ]
 
 def reset_sidebar():
-    """Borra el estado de la sesión y recarga la app."""
+    """Clear session state and reload the app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -36,7 +36,7 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Iniciar variables de sesión para conservar resultados
+# Initialize session state variables for results
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
@@ -257,6 +257,7 @@ if iniciar:
             "ciclos_anuales": ciclos_anuales,
             "cyc_min": cyc_min,
             "cyc_max": cyc_max,
+            "flujo_caja": flujo_caja,
         }
     )
 
@@ -314,8 +315,11 @@ if iniciar:
         st.plotly_chart(fig, use_container_width=True)
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
         st.plotly_chart(fig_b, use_container_width=True)
-        cash = -potencia_mw * 1000 * capex_kw + resultado["Beneficio (€)"].cumsum()
-        fig_cash = px.line(x=resultado["Fecha"], y=cash, labels={"x": "Fecha", "y": "€"}, title="Flujo de caja acumulado")
+
+        years = list(range(16))
+        fig_cash = px.bar(x=years, y=flujo_caja,
+                          labels={"x": "Año", "y": "Flujo de caja (€)"},
+                          title="Flujo de caja anual")
         st.plotly_chart(fig_cash, use_container_width=True)
 
     with tab_ind:
@@ -342,6 +346,7 @@ elif st.session_state["resultado"] is not None:
     ciclos_anuales = st.session_state["ciclos_anuales"]
     cyc_min = st.session_state["cyc_min"]
     cyc_max = st.session_state["cyc_max"]
+    flujo_caja = st.session_state["flujo_caja"]
 
     tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
 
@@ -397,8 +402,11 @@ elif st.session_state["resultado"] is not None:
         st.plotly_chart(fig, use_container_width=True)
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
         st.plotly_chart(fig_b, use_container_width=True)
-        cash = -potencia_mw * 1000 * capex_kw + resultado["Beneficio (€)"].cumsum()
-        fig_cash = px.line(x=resultado["Fecha"], y=cash, labels={"x": "Fecha", "y": "€"}, title="Flujo de caja acumulado")
+
+        years = list(range(16))
+        fig_cash = px.bar(x=years, y=flujo_caja,
+                          labels={"x": "Año", "y": "Flujo de caja (€)"},
+                          title="Flujo de caja anual")
         st.plotly_chart(fig_cash, use_container_width=True)
 
     with tab_ind:
