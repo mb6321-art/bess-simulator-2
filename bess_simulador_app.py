@@ -22,10 +22,13 @@ RESULT_KEYS = [
     "cyc_min",
     "cyc_max",
     "degradacion",
+    "flujo_caja",
+    "sens_dur",
+    "horas_optimas",
 ]
 
 def reset_sidebar():
-    """Borra la sesión y recarga la app."""
+    """Clear session state and reload the app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -38,7 +41,7 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Variables de sesión
+# Initialize session state variables for results
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
@@ -142,6 +145,27 @@ def resumen_mensual(df):
           .rename_axis("Mes")
     )
 
+def analizar_duracion(precios, potencia_mw, max_h, ef_carga, ef_descarga,
+                       estrategia, umbral_carga, umbral_descarga, margen,
+                       horario, degradacion, capex_kw, coste_desarrollo_mw,
+                       opex_kw, tasa_descuento):
+    """Calculate VAN for each duration from 1 to max_h."""
+    datos = []
+    for h in range(1, max_h + 1):
+        res = simular(precios, potencia_mw, h, ef_carga, ef_descarga,
+                       estrategia, umbral_carga, umbral_descarga,
+                       margen, horario)
+        ingreso_anual = res["Beneficio (€)"].sum()
+        capex_total = potencia_mw * 1000 * capex_kw + potencia_mw * coste_desarrollo_mw
+        inversion = -capex_total
+        ingresos = [ingreso_anual * (1 - degradacion / 100) ** i for i in range(15)]
+        flujo = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw for i in range(15)]
+        van = npf.npv(tasa_descuento / 100, flujo)
+        datos.append({"Duración (h)": h, "VAN": van})
+    df = pd.DataFrame(datos)
+    opt = df.loc[df["VAN"].idxmax(), "Duración (h)"]
+    return df, opt
+
 # --- Interfaz ---
 st.title("🔋 Simulador de BESS")
 
@@ -161,6 +185,8 @@ with st.sidebar:
     )
     potencia_mw = st.slider("Potencia (MW)", 1, 100, 10)
     duracion_h = st.slider("Duración (h)", 1, 10, 4)
+    analizar_opt = st.checkbox("Analizar duración óptima")
+    max_h = st.slider("Duración máxima a evaluar", 1, 10, 6) if analizar_opt else 0
     ef_carga = st.slider("Eficiencia de carga (%)", 50, 100, 95) / 100
     ef_descarga = st.slider("Eficiencia de descarga (%)", 50, 100, 95) / 100
 
@@ -218,7 +244,7 @@ with st.sidebar:
 3. En las pestañas de la derecha encontrarás los datos, las gráficas y los indicadores económicos.<br><br>
 **Estrategias**<br>
 - **Percentiles**: la batería se carga cuando el precio está por debajo del percentil indicado en *Umbral de carga* (por ejemplo 0.25) y se descarga por encima del valor elegido en *Umbral de descarga* (por ejemplo 0.75).<br>
-- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media − margen y se descarga si supera media + margen. Ejemplo: con margen 10 €/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
+- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media – margen y se descarga si supera media + margen. Ejemplo: con margen 10 €/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
 - **Programada**: se suministra un CSV con columnas `hora` y `accion` (C=cargar, D=descargar) que define las horas de operación diaria, por ejemplo `0,C` `1,C` `16,D` `17,D`.
 </small>
 """
@@ -258,6 +284,27 @@ if iniciar:
 
     mensual = resumen_mensual(resultado)
 
+    sens_df = None
+    horas_opt = None
+    if analizar_opt and max_h > 1:
+        sens_df, horas_opt = analizar_duracion(
+            precios,
+            potencia_mw,
+            max_h,
+            ef_carga,
+            ef_descarga,
+            estrategia,
+            umbral_carga,
+            umbral_descarga,
+            margen,
+            horario,
+            degradacion,
+            capex_kw,
+            coste_desarrollo_mw,
+            opex_kw,
+            tasa_descuento,
+        )
+
     ingreso_anual = resultado["Beneficio (€)"].sum()
     capex_total = potencia_mw * 1000 * capex_kw + potencia_mw * coste_desarrollo_mw
     inversion = -capex_total
@@ -269,8 +316,7 @@ if iniciar:
     deuda = capex_total * (ratio_apalancamiento / 100)
     equity = capex_total - deuda
     interes = deuda * (coste_financiacion / 100)
-    flujo_equity = [-equity] + [ingresos[i] - potencia_mw * 1000 * opex_kw - interes for i in range(14)] \
-        + [ingresos[14] - potencia_mw * 1000 * opex_kw - interes - deuda]
+    flujo_equity = [-equity] + [ingresos[i] - potencia_mw * 1000 * opex_kw - interes for i in range(14)] + [ingresos[14] - potencia_mw * 1000 * opex_kw - interes - deuda]
     tir_equity = npf.irr(flujo_equity)
 
     total_descarga = resultado["Descarga (MWh)"].sum()
@@ -294,6 +340,8 @@ if iniciar:
             "cyc_max": cyc_max,
             "flujo_caja": flujo_caja,
             "degradacion": degradacion,
+            "sens_dur": sens_df,
+            "horas_optimas": horas_opt,
         }
     )
 
@@ -357,7 +405,16 @@ if iniciar:
                           labels={"x": "Año", "y": "Flujo de caja (€)"},
                           title="Flujo de caja anual")
         st.plotly_chart(fig_cash, use_container_width=True)
-
+        if sens_df is not None:
+            fig_s = px.line(
+                sens_df,
+                x="Duración (h)",
+                y="VAN",
+                markers=True,
+                title="VAN según duración",
+            )
+            fig_s.add_vline(x=horas_opt, line_dash="dash", line_color="red")
+            st.plotly_chart(fig_s, use_container_width=True)
     with tab_ind:
         st.subheader("📊 Indicadores económicos")
         info_text = textwrap.dedent(
@@ -369,11 +426,11 @@ if iniciar:
             - **TIR equity**: {tir_equity*100:.2f} %
             - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
             - **Degradación anual**: {degradacion:.1f} %
+            {f"- **Duración óptima**: {horas_opt} h" if horas_opt else ""}
             """
         )
         st.markdown(info_text)
 elif st.session_state["resultado"] is not None:
-    # Mostrar los últimos resultados almacenados
     resultado = st.session_state["resultado"]
     mensual = st.session_state["mensual"]
     fi_date = st.session_state["fi_date"]
@@ -388,6 +445,8 @@ elif st.session_state["resultado"] is not None:
     cyc_max = st.session_state["cyc_max"]
     flujo_caja = st.session_state["flujo_caja"]
     degradacion = st.session_state["degradacion"]
+    sens_df = st.session_state.get("sens_dur")
+    horas_opt = st.session_state.get("horas_optimas")
 
     tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
 
@@ -461,8 +520,10 @@ elif st.session_state["resultado"] is not None:
             - **TIR equity**: {tir_equity*100:.2f} %
             - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
             - **Degradación anual**: {degradacion:.1f} %
+            {f"- **Duración óptima**: {horas_opt} h" if horas_opt else ""}
             """
         )
         st.markdown(info_text)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
+
