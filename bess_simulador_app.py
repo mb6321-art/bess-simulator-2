@@ -34,9 +34,21 @@ def reset_sidebar():
     st.experimental_rerun()
 
 TECHS = {
-    "Li-ion LFP": {"costo": (220, 240), "ciclos": (6000, 8000)},
-    "Li-ion NMC": {"costo": (250, 280), "ciclos": (3000, 4000)},
-    "Sodio-ion (Na-ion)": {"costo": (280, 320), "ciclos": (4000, 5000)},
+    "Li-ion LFP": {
+        "costo": (220, 240),
+        "ciclos": (6000, 10000),
+        "degrad": (1.5, 2.5),
+    },
+    "Li-ion NMC": {
+        "costo": (250, 280),
+        "ciclos": (4000, 7000),
+        "degrad": (2.5, 4.0),
+    },
+    "Sodio-ion (Na-ion)": {
+        "costo": (280, 320),
+        "ciclos": (3000, 6000),
+        "degrad": (2.0, 3.0),
+    },
 }
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
@@ -179,9 +191,17 @@ with st.sidebar:
     tecnologia = st.selectbox("Tecnología", list(TECHS.keys()))
     cap_min, cap_max = TECHS[tecnologia]["costo"]
     cyc_min, cyc_max = TECHS[tecnologia]["ciclos"]
-    st.caption(f"Vida útil estimada: {cyc_min:,}-{cyc_max:,} ciclos")
+    deg_lo, deg_hi = TECHS[tecnologia]["degrad"]
+    deg_min = max(0.0, deg_lo - 1.0)
+    deg_max = deg_hi + 1.0
+    deg_default = (deg_lo + deg_hi) / 2
+    st.caption(
+        f"Vida útil estimada: {cyc_min:,}-{cyc_max:,} ciclos. "
+        f"Degradación típica {deg_lo}-{deg_hi}% anual"
+    )
     degradacion = st.slider(
-        "Degradación anual (%)", min_value=0.0, max_value=5.0, value=2.0, step=0.1
+        "Degradación anual (%)", min_value=deg_min, max_value=deg_max,
+        value=deg_default, step=0.1
     )
     potencia_mw = st.slider("Potencia (MW)", 1, 100, 10)
     duracion_h = st.slider("Duración (h)", 1, 10, 4)
@@ -202,8 +222,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil"
-            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil "
+            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
