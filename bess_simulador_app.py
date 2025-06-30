@@ -21,10 +21,11 @@ RESULT_KEYS = [
     "ciclos_anuales",
     "cyc_min",
     "cyc_max",
+    "degradacion",
 ]
 
 def reset_sidebar():
-    """Clear session state and reload the app."""
+    """Borra la sesión y recarga la app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -37,7 +38,7 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Initialize session state variables for results
+# Variables de sesión
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
@@ -155,6 +156,9 @@ with st.sidebar:
     cap_min, cap_max = TECHS[tecnologia]["costo"]
     cyc_min, cyc_max = TECHS[tecnologia]["ciclos"]
     st.caption(f"Vida útil estimada: {cyc_min:,}-{cyc_max:,} ciclos")
+    degradacion = st.slider(
+        "Degradación anual (%)", min_value=0.0, max_value=5.0, value=2.0, step=0.1
+    )
     potencia_mw = st.slider("Potencia (MW)", 1, 100, 10)
     duracion_h = st.slider("Duración (h)", 1, 10, 4)
     ef_carga = st.slider("Eficiencia de carga (%)", 50, 100, 95) / 100
@@ -214,7 +218,7 @@ with st.sidebar:
 3. En las pestañas de la derecha encontrarás los datos, las gráficas y los indicadores económicos.<br><br>
 **Estrategias**<br>
 - **Percentiles**: la batería se carga cuando el precio está por debajo del percentil indicado en *Umbral de carga* (por ejemplo 0.25) y se descarga por encima del valor elegido en *Umbral de descarga* (por ejemplo 0.75).<br>
-- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media&nbsp;&minus;&nbsp;margen y se descarga si supera media&nbsp;+&nbsp;margen. Ejemplo: con margen 10&nbsp;€/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
+- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media − margen y se descarga si supera media + margen. Ejemplo: con margen 10 €/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
 - **Programada**: se suministra un CSV con columnas `hora` y `accion` (C=cargar, D=descargar) que define las horas de operación diaria, por ejemplo `0,C` `1,C` `16,D` `17,D`.
 </small>
 """
@@ -257,14 +261,16 @@ if iniciar:
     ingreso_anual = resultado["Beneficio (€)"].sum()
     capex_total = potencia_mw * 1000 * capex_kw + potencia_mw * coste_desarrollo_mw
     inversion = -capex_total
-    flujo_caja = [inversion] + [ingreso_anual - potencia_mw * 1000 * opex_kw] * 15
+    ingresos = [ingreso_anual * (1 - degradacion / 100) ** i for i in range(15)]
+    flujo_caja = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw for i in range(15)]
     van = npf.npv(tasa_descuento / 100, flujo_caja)
     tir = npf.irr(flujo_caja)
 
     deuda = capex_total * (ratio_apalancamiento / 100)
     equity = capex_total - deuda
     interes = deuda * (coste_financiacion / 100)
-    flujo_equity = [-equity] + [ingreso_anual - potencia_mw * 1000 * opex_kw - interes] * 14 + [ingreso_anual - potencia_mw * 1000 * opex_kw - interes - deuda]
+    flujo_equity = [-equity] + [ingresos[i] - potencia_mw * 1000 * opex_kw - interes for i in range(14)] \
+        + [ingresos[14] - potencia_mw * 1000 * opex_kw - interes - deuda]
     tir_equity = npf.irr(flujo_equity)
 
     total_descarga = resultado["Descarga (MWh)"].sum()
@@ -287,6 +293,7 @@ if iniciar:
             "cyc_min": cyc_min,
             "cyc_max": cyc_max,
             "flujo_caja": flujo_caja,
+            "degradacion": degradacion,
         }
     )
 
@@ -361,10 +368,12 @@ if iniciar:
             - **TIR proyecto**: {tir*100:.2f} %
             - **TIR equity**: {tir_equity*100:.2f} %
             - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+            - **Degradación anual**: {degradacion:.1f} %
             """
         )
         st.markdown(info_text)
 elif st.session_state["resultado"] is not None:
+    # Mostrar los últimos resultados almacenados
     resultado = st.session_state["resultado"]
     mensual = st.session_state["mensual"]
     fi_date = st.session_state["fi_date"]
@@ -378,6 +387,7 @@ elif st.session_state["resultado"] is not None:
     cyc_min = st.session_state["cyc_min"]
     cyc_max = st.session_state["cyc_max"]
     flujo_caja = st.session_state["flujo_caja"]
+    degradacion = st.session_state["degradacion"]
 
     tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
 
@@ -450,6 +460,7 @@ elif st.session_state["resultado"] is not None:
             - **TIR proyecto**: {tir*100:.2f} %
             - **TIR equity**: {tir_equity*100:.2f} %
             - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+            - **Degradación anual**: {degradacion:.1f} %
             """
         )
         st.markdown(info_text)
