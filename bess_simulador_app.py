@@ -28,7 +28,7 @@ RESULT_KEYS = [
 ]
 
 def reset_sidebar():
-    """Restablece los valores de la barra lateral."""
+    """Clear session state and reload the app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -41,7 +41,7 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Inicializar variables de sesión
+# Initialize session state variables for results
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
@@ -149,7 +149,7 @@ def analizar_duracion(precios, potencia_mw, max_h, ef_carga, ef_descarga,
                        estrategia, umbral_carga, umbral_descarga, margen,
                        horario, degradacion, capex_kw, coste_desarrollo_mw,
                        opex_kw, tasa_descuento):
-    """Calcula el VAN para cada duración de 1 a max_h."""
+    """Calculate VAN for each duration from 1 to max_h."""
     datos = []
     for h in range(1, max_h + 1):
         res = simular(precios, potencia_mw, h, ef_carga, ef_descarga,
@@ -202,8 +202,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil "
-            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil"
+            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
@@ -254,7 +254,7 @@ with st.sidebar:
 3. En las pestañas de la derecha encontrarás los datos, las gráficas y los indicadores económicos.<br><br>
 **Estrategias**<br>
 - **Percentiles**: la batería se carga cuando el precio está por debajo del percentil indicado en *Umbral de carga* (por ejemplo 0.25) y se descarga por encima del valor elegido en *Umbral de descarga* (por ejemplo 0.75).<br>
-- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media &minus; margen y se descarga si supera media + margen. Ejemplo: con margen 10 €/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
+- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media&nbsp;&minus;&nbsp;margen y se descarga si supera media&nbsp;+&nbsp;margen. Ejemplo: con margen 10&nbsp;€/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
 - **Programada**: se suministra un CSV con columnas `hora` y `accion` (C=cargar, D=descargar) que define las horas de operación diaria, por ejemplo `0,C` `1,C` `16,D` `17,D`.
 </small>
 """
