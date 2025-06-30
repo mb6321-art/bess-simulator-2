@@ -7,6 +7,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import textwrap
 import os
+from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 
 RESULT_KEYS = [
     "resultado",
@@ -222,8 +224,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil "
-            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil"
+            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
@@ -282,14 +284,16 @@ with st.sidebar:
 
 if iniciar:
     precios = cargar_datos(zona, archivo)
-    fecha_inicio = st.date_input("Desde", precios["Fecha"].min())
-    fecha_fin = st.date_input("Hasta", precios["Fecha"].max())
-    fecha_inicio = pd.to_datetime(fecha_inicio)
-    fecha_fin = pd.to_datetime(fecha_fin)
-    precios = precios[(precios["Fecha"] >= fecha_inicio) &
-                      (precios["Fecha"] <= fecha_fin)]
-    fi_date = fecha_inicio.date()
-    ff_date = fecha_fin.date()
+    start_default = precios["Fecha"].min().date()
+    fecha_inicio = st.date_input("Desde", start_default)
+    fi_dt = pd.to_datetime(fecha_inicio)
+    fecha_fin_dt = fi_dt + relativedelta(years=15) - timedelta(days=1)
+    fecha_fin_dt = min(fecha_fin_dt, pd.to_datetime(precios["Fecha"].max()))
+    st.caption(f"Se simula hasta {fecha_fin_dt.date()} (máximo 15 años)")
+    precios = precios[(precios["Fecha"] >= fi_dt) &
+                      (precios["Fecha"] <= fecha_fin_dt)]
+    fi_date = fi_dt.date()
+    ff_date = fecha_fin_dt.date()
 
     horario = None
     if estrategia == "Programada" and horario_file is not None:
@@ -348,7 +352,7 @@ if iniciar:
 
     total_descarga = resultado["Descarga (MWh)"].sum()
     ciclos_periodo = total_descarga / (potencia_mw * duracion_h)
-    dias_periodo = (fecha_fin - fecha_inicio).days + 1
+    dias_periodo = (fecha_fin_dt - fi_dt).days + 1
     ciclos_anuales = ciclos_periodo / (dias_periodo / 365)
 
     st.session_state.update(
