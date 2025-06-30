@@ -22,6 +22,7 @@ RESULT_KEYS = [
     "cyc_min",
     "cyc_max",
 ]
+
 def reset_sidebar():
     """Clear session state and reload the app."""
     for k in list(st.session_state.keys()):
@@ -33,6 +34,7 @@ TECHS = {
     "Li-ion NMC": {"costo": (250, 280), "ciclos": (3000, 4000)},
     "Sodio-ion (Na-ion)": {"costo": (280, 320), "ciclos": (4000, 5000)},
 }
+
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
 # Initialize session state variables for results
@@ -152,12 +154,6 @@ with st.sidebar:
     tecnologia = st.selectbox("Tecnología", list(TECHS.keys()))
     cap_min, cap_max = TECHS[tecnologia]["costo"]
     cyc_min, cyc_max = TECHS[tecnologia]["ciclos"]
-    capex_kw = st.slider(
-        "CAPEX (€/kW)",
-        min_value=cap_min,
-        max_value=cap_max,
-        value=(cap_min + cap_max) // 2,
-    )
     st.caption(f"Vida útil estimada: {cyc_min:,}-{cyc_max:,} ciclos")
     potencia_mw = st.slider("Potencia (MW)", 1, 100, 10)
     duracion_h = st.slider("Duración (h)", 1, 10, 4)
@@ -170,11 +166,10 @@ with st.sidebar:
     umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
     umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
     st.caption(
-        "La batería se carga cuando el precio está por debajo del "
-        "percentil seleccionado en 'Umbral de carga' y se descarga "
-        "cuando supera el percentil indicado en 'Umbral de descarga'."
+        "La batería se carga cuando el precio está por debajo del percentil "
+        "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+        "percentil indicado en 'Umbral de descarga'."
     )
-    margen = st.number_input("Margen (€/MWh)", value=10.0)
 
     st.markdown("### Parámetros económicos")
     coste_desarrollo_mw = st.slider(
@@ -184,6 +179,12 @@ with st.sidebar:
         value=20000,
         step=1000,
     )
+    capex_kw = st.slider(
+        "CAPEX (€/kW)",
+        min_value=cap_min,
+        max_value=cap_max,
+        value=(cap_min + cap_max) // 2,
+    )
     opex_kw = st.slider(
         "OPEX anual (€/kW)",
         min_value=5.0,
@@ -192,6 +193,7 @@ with st.sidebar:
         step=0.1,
     )
     coste_mwh = st.number_input("Coste operación (€/MWh cargado)", value=0.0)
+    margen = st.number_input("Margen (€/MWh)", value=10.0)
 
     st.markdown("#### Modelo")
     tasa_descuento = st.number_input("Tasa de descuento (%)", 0.0, 20.0, 7.0)
@@ -360,4 +362,3 @@ if iniciar:
         st.markdown(info_text)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
-
