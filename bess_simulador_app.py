@@ -33,7 +33,7 @@ RESULT_KEYS = [
 ]
 
 def reset_sidebar():
-    """Borra el estado de la sesión y recarga la aplicación."""
+    """Clear session state and reload the app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -58,7 +58,7 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Inicializa las variables de sesión
+# Initialize session state variables for results
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
@@ -164,16 +164,16 @@ def resumen_mensual(df):
 
 def analizar_duracion(precios, potencia_mw, max_h, ef_carga, ef_descarga,
                        estrategia, umbral_carga, umbral_descarga, margen,
-                       horario, degradacion, capex_mwh, coste_desarrollo_mw,
+                       horario, degradacion, capex_kwh, coste_desarrollo_mw,
                        opex_kw, tasa_descuento):
-    """Calcula el VAN para cada duración de 1 hasta max_h."""
+    """Calculate VAN for each duration from 1 to max_h."""
     datos = []
     for h in range(1, max_h + 1):
         res = simular(precios, potencia_mw, h, ef_carga, ef_descarga,
                        estrategia, umbral_carga, umbral_descarga,
                        margen, horario)
         ingreso_anual = res["Beneficio (€)"].sum()
-        capex_bat = potencia_mw * h * capex_mwh
+        capex_bat = potencia_mw * h * 1000 * capex_kwh
         coste_dev = potencia_mw * coste_desarrollo_mw
         capex_total = capex_bat + coste_dev
         inversion = -capex_total
@@ -229,8 +229,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil "
-            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil"
+            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
@@ -247,8 +247,8 @@ with st.sidebar:
         value=20000,
         step=1000,
     )
-    capex_mwh = st.slider(
-        "CAPEX (€/MWh)",
+    capex_kwh = st.slider(
+        "CAPEX (€/kWh)",
         min_value=cap_min,
         max_value=cap_max,
         value=(cap_min + cap_max) // 2,
@@ -281,7 +281,7 @@ with st.sidebar:
 3. En las pestañas de la derecha encontrarás los datos, las gráficas y los indicadores económicos.<br><br>
 **Estrategias**<br>
 - **Percentiles**: la batería se carga cuando el precio está por debajo del percentil indicado en *Umbral de carga* (por ejemplo 0.25) y se descarga por encima del valor elegido en *Umbral de descarga* (por ejemplo 0.75).<br>
-- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media − margen y se descarga si supera media + margen. Ejemplo: con margen 10 €/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
+- **Margen fijo**: se calcula el precio medio del período. Se carga si el precio cae por debajo de media&nbsp;&minus;&nbsp;margen y se descarga si supera media&nbsp;+&nbsp;margen. Ejemplo: con margen 10&nbsp;€/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
 - **Programada**: se suministra un CSV con columnas `hora` y `accion` (C=cargar, D=descargar) que define las horas de operación diaria, por ejemplo `0,C` `1,C` `16,D` `17,D`.
 </small>
 """
@@ -335,14 +335,14 @@ if iniciar:
             margen,
             horario,
             degradacion,
-            capex_mwh,
+            capex_kwh,
             coste_desarrollo_mw,
             opex_kw,
             tasa_descuento,
         )
 
     ingreso_anual = resultado["Beneficio (€)"].sum()
-    capex_bateria = potencia_mw * duracion_h * capex_mwh
+    capex_bateria = potencia_mw * duracion_h * 1000 * capex_kwh
     coste_desarrollo = potencia_mw * coste_desarrollo_mw
     capex_total = capex_bateria + coste_desarrollo
     inversion = -capex_total
@@ -443,11 +443,11 @@ if iniciar:
         st.plotly_chart(fig_b, use_container_width=True)
 
         years = list(range(16))
-        colores = ["blue" if v >= 0 else "red" for v in flujos_anuales]
+        colores = ["blue" if v >= 0 else "red" for v in flujo_anual]
         fig_cash = go.Figure()
         fig_cash.add_bar(x=[0], y=[-capex_bateria], name="CAPEX", marker_color="red")
         fig_cash.add_bar(x=[0], y=[-coste_desarrollo], name="Coste desarrollo", marker_color="orange")
-        fig_cash.add_bar(x=list(range(1, 16)), y=flujos_anuales, name="Flujo neto", marker_color=colores)
+        fig_cash.add_bar(x=list(range(1, 16)), y=flujo_anual, name="Flujo neto", marker_color=colores)
         fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja anual")
         st.plotly_chart(fig_cash, use_container_width=True)
         if sens_df is not None:
@@ -460,7 +460,6 @@ if iniciar:
             )
             fig_s.add_vline(x=horas_opt, line_dash="dash", line_color="red")
             st.plotly_chart(fig_s, use_container_width=True)
-
     with tab_ind:
         st.subheader("📊 Indicadores económicos")
         info_text = textwrap.dedent(
@@ -477,7 +476,6 @@ if iniciar:
         )
         st.markdown(info_text)
 elif st.session_state["resultado"] is not None:
-    # Si el usuario mueve la fecha sin reiniciar, se muestran los resultados guardados
     resultado = st.session_state["resultado"]
     mensual = st.session_state["mensual"]
     fi_date = st.session_state["fi_date"]
