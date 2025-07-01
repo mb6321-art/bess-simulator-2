@@ -161,7 +161,7 @@ def resumen_mensual(df):
 
 def analizar_duracion(precios, potencia_mw, max_h, ef_carga, ef_descarga,
                        estrategia, umbral_carga, umbral_descarga, margen,
-                       horario, degradacion, capex_kw, coste_desarrollo_mw,
+                       horario, degradacion, capex_mwh, coste_desarrollo_mw,
                        opex_kw, tasa_descuento):
     """Calculate VAN for each duration from 1 to max_h."""
     datos = []
@@ -170,7 +170,9 @@ def analizar_duracion(precios, potencia_mw, max_h, ef_carga, ef_descarga,
                        estrategia, umbral_carga, umbral_descarga,
                        margen, horario)
         ingreso_anual = res["Beneficio (€)"].sum()
-        capex_total = potencia_mw * 1000 * capex_kw + potencia_mw * coste_desarrollo_mw
+        capex_total = (
+            potencia_mw * h * capex_mwh + potencia_mw * coste_desarrollo_mw
+        )
         inversion = -capex_total
         ingresos = [ingreso_anual * (1 - degradacion / 100) ** i for i in range(15)]
         flujo = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw for i in range(15)]
@@ -224,8 +226,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil"
-            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil "
+            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
@@ -242,8 +244,8 @@ with st.sidebar:
         value=20000,
         step=1000,
     )
-    capex_kw = st.slider(
-        "CAPEX (€/kW)",
+    capex_mwh = st.slider(
+        "CAPEX (€/MWh)",
         min_value=cap_min,
         max_value=cap_max,
         value=(cap_min + cap_max) // 2,
@@ -330,14 +332,17 @@ if iniciar:
             margen,
             horario,
             degradacion,
-            capex_kw,
+            capex_mwh,
             coste_desarrollo_mw,
             opex_kw,
             tasa_descuento,
         )
 
     ingreso_anual = resultado["Beneficio (€)"].sum()
-    capex_total = potencia_mw * 1000 * capex_kw + potencia_mw * coste_desarrollo_mw
+    capex_total = (
+        potencia_mw * duracion_h * capex_mwh
+        + potencia_mw * coste_desarrollo_mw
+    )
     inversion = -capex_total
     ingresos = [ingreso_anual * (1 - degradacion / 100) ** i for i in range(15)]
     flujo_caja = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw for i in range(15)]
