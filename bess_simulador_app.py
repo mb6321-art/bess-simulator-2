@@ -30,6 +30,7 @@ RESULT_KEYS = [
     "capex_bateria",
     "coste_desarrollo",
     "flujos_anuales",
+    "flujos_equity",
 ]
 
 def reset_sidebar():
@@ -88,9 +89,20 @@ def cargar_datos(zona, archivo=None):
     return df
 
 # --- Simulación ---
-def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
-            estrategia, umbral_carga=0.25, umbral_descarga=0.75,
-            margen=0, horario=None):
+def simular(
+    precios,
+    potencia_mw,
+    duracion_h,
+    ef_carga,
+    ef_descarga,
+    estrategia,
+    umbral_carga=0.25,
+    umbral_descarga=0.75,
+    margen=0,
+    horario=None,
+    coste_carga=0.0,
+    coste_descarga=0.0,
+):
     energia_mwh = potencia_mw * duracion_h
     capacidad_actual = 0
     resultados = []
@@ -109,24 +121,24 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
                 carga = potencia_mw * ef_carga
                 capacidad_actual += carga
                 estado = "Carga"
-                ingreso = -precio * carga
+                ingreso = -(precio + coste_carga) * carga
             elif precio > p_sup and capacidad_actual > 0:
                 descarga = min(potencia_mw * ef_descarga, capacidad_actual)
                 capacidad_actual -= descarga
                 estado = "Descarga"
-                ingreso = precio * descarga
+                ingreso = (precio - coste_descarga) * descarga
 
         elif estrategia == "Margen fijo":
             if precio < media - margen and capacidad_actual < energia_mwh:
                 carga = potencia_mw * ef_carga
                 capacidad_actual += carga
                 estado = "Carga"
-                ingreso = -precio * carga
+                ingreso = -(precio + coste_carga) * carga
             elif precio > media + margen and capacidad_actual > 0:
                 descarga = min(potencia_mw * ef_descarga, capacidad_actual)
                 capacidad_actual -= descarga
                 estado = "Descarga"
-                ingreso = precio * descarga
+                ingreso = (precio - coste_descarga) * descarga
 
         elif estrategia == "Programada" and horario is not None:
             accion = horario.get(row["Fecha"].hour)
@@ -134,12 +146,12 @@ def simular(precios, potencia_mw, duracion_h, ef_carga, ef_descarga,
                 carga = potencia_mw * ef_carga
                 capacidad_actual += carga
                 estado = "Carga"
-                ingreso = -precio * carga
+                ingreso = -(precio + coste_carga) * carga
             elif accion == "D" and capacidad_actual > 0:
                 descarga = min(potencia_mw * ef_descarga, capacidad_actual)
                 capacidad_actual -= descarga
                 estado = "Descarga"
-                ingreso = precio * descarga
+                ingreso = (precio - coste_descarga) * descarga
 
         resultados.append({
             "Fecha": row["Fecha"],
@@ -162,16 +174,42 @@ def resumen_mensual(df):
           .rename_axis("Mes")
     )
 
-def analizar_duracion(precios, potencia_mw, max_h, ef_carga, ef_descarga,
-                       estrategia, umbral_carga, umbral_descarga, margen,
-                       horario, degradacion, capex_kwh, coste_desarrollo_mw,
-                       opex_kw, tasa_descuento):
+def analizar_duracion(
+    precios,
+    potencia_mw,
+    max_h,
+    ef_carga,
+    ef_descarga,
+    estrategia,
+    umbral_carga,
+    umbral_descarga,
+    margen,
+    horario,
+    degradacion,
+    capex_kwh,
+    coste_desarrollo_mw,
+    opex_kw,
+    tasa_descuento,
+    coste_carga,
+    coste_descarga,
+):
     """Calculate VAN for each duration from 1 to max_h."""
     datos = []
     for h in range(1, max_h + 1):
-        res = simular(precios, potencia_mw, h, ef_carga, ef_descarga,
-                       estrategia, umbral_carga, umbral_descarga,
-                       margen, horario)
+        res = simular(
+            precios,
+            potencia_mw,
+            h,
+            ef_carga,
+            ef_descarga,
+            estrategia,
+            umbral_carga,
+            umbral_descarga,
+            margen,
+            horario,
+            coste_carga=coste_carga,
+            coste_descarga=coste_descarga,
+        )
         ingreso_anual = res["Beneficio (€)"].sum()
         capex_bat = potencia_mw * h * 1000 * capex_kwh
         coste_dev = potencia_mw * coste_desarrollo_mw
@@ -229,8 +267,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil"
-            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil "
+            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
@@ -260,7 +298,10 @@ with st.sidebar:
         value=6.5,
         step=0.1,
     )
-    coste_mwh = st.number_input("Coste operación (€/MWh cargado)", value=0.0)
+    coste_carga = st.number_input("Coste carga (€/MWh)", value=0.0)
+    coste_descarga = st.number_input(
+        "Coste descarga (€/MWh)", value=0.0
+    )
 
     st.markdown("#### Modelo")
     tasa_descuento = st.number_input("Tasa de descuento (%)", 0.0, 20.0, 7.0)
@@ -316,6 +357,8 @@ if iniciar:
         umbral_descarga,
         margen,
         horario,
+        coste_carga,
+        coste_descarga,
     )
 
     mensual = resumen_mensual(resultado)
@@ -339,6 +382,8 @@ if iniciar:
             coste_desarrollo_mw,
             opex_kw,
             tasa_descuento,
+            coste_carga,
+            coste_descarga,
         )
 
     ingreso_anual = resultado["Beneficio (€)"].sum()
@@ -354,8 +399,24 @@ if iniciar:
 
     deuda = capex_total * (ratio_apalancamiento / 100)
     equity = capex_total - deuda
-    interes = deuda * (coste_financiacion / 100)
-    flujo_equity = [-equity] + [ingresos[i] - potencia_mw * 1000 * opex_kw - interes for i in range(14)] + [ingresos[14] - potencia_mw * 1000 * opex_kw - interes - deuda]
+    tasa_mensual = (coste_financiacion / 100) / 12
+    meses = 15 * 12
+    pago_mes = -npf.pmt(tasa_mensual, meses, deuda) if deuda else 0
+    saldo = deuda
+    flujo_equity = [-equity]
+    flujos_equity_anual = []
+    for year in range(15):
+        interes_anual = 0
+        principal_anual = 0
+        for _ in range(12):
+            interes_mes = saldo * tasa_mensual
+            principal_mes = pago_mes - interes_mes
+            saldo -= principal_mes
+            interes_anual += interes_mes
+            principal_anual += principal_mes
+        pago_total = interes_anual + principal_anual
+        flujo_equity.append(ingresos[year] - potencia_mw * 1000 * opex_kw - pago_total)
+        flujos_equity_anual.append(ingresos[year] - potencia_mw * 1000 * opex_kw - pago_total)
     tir_equity = npf.irr(flujo_equity)
 
     total_descarga = resultado["Descarga (MWh)"].sum()
@@ -379,6 +440,7 @@ if iniciar:
             "cyc_max": cyc_max,
             "flujo_caja": flujo_caja,
             "flujos_anuales": flujo_anual,
+            "flujos_equity": flujos_equity_anual,
             "capex_bateria": capex_bateria,
             "coste_desarrollo": coste_desarrollo,
             "degradacion": degradacion,
@@ -387,7 +449,7 @@ if iniciar:
         }
     )
 
-    tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
+    tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Resultados económicos"])
 
     with tab_res:
         st.subheader("📈 Resultados horarios")
@@ -442,14 +504,6 @@ if iniciar:
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
         st.plotly_chart(fig_b, use_container_width=True)
 
-        years = list(range(16))
-        colores = ["blue" if v >= 0 else "red" for v in flujo_anual]
-        fig_cash = go.Figure()
-        fig_cash.add_bar(x=[0], y=[-capex_bateria], name="CAPEX", marker_color="red")
-        fig_cash.add_bar(x=[0], y=[-coste_desarrollo], name="Coste desarrollo", marker_color="orange")
-        fig_cash.add_bar(x=list(range(1, 16)), y=flujo_anual, name="Flujo neto", marker_color=colores)
-        fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja anual")
-        st.plotly_chart(fig_cash, use_container_width=True)
         if sens_df is not None:
             fig_s = px.line(
                 sens_df,
@@ -461,7 +515,7 @@ if iniciar:
             fig_s.add_vline(x=horas_opt, line_dash="dash", line_color="red")
             st.plotly_chart(fig_s, use_container_width=True)
     with tab_ind:
-        st.subheader("📊 Indicadores económicos")
+        st.subheader("📊 Resultados económicos")
         info_text = textwrap.dedent(
             f"""
             - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
@@ -475,81 +529,6 @@ if iniciar:
             """
         )
         st.markdown(info_text)
-elif st.session_state["resultado"] is not None:
-    resultado = st.session_state["resultado"]
-    mensual = st.session_state["mensual"]
-    fi_date = st.session_state["fi_date"]
-    ff_date = st.session_state["ff_date"]
-    ingreso_anual = st.session_state["ingreso_anual"]
-    inversion = st.session_state["inversion"]
-    van = st.session_state["van"]
-    tir = st.session_state["tir"]
-    tir_equity = st.session_state["tir_equity"]
-    ciclos_anuales = st.session_state["ciclos_anuales"]
-    cyc_min = st.session_state["cyc_min"]
-    cyc_max = st.session_state["cyc_max"]
-    flujo_caja = st.session_state["flujo_caja"]
-    flujos_anuales = st.session_state["flujos_anuales"]
-    capex_bateria = st.session_state["capex_bateria"]
-    coste_desarrollo = st.session_state["coste_desarrollo"]
-    degradacion = st.session_state["degradacion"]
-    sens_df = st.session_state.get("sens_dur")
-    horas_opt = st.session_state.get("horas_optimas")
-
-    tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Indicadores"])
-
-    with tab_res:
-        st.subheader("📈 Resultados horarios")
-        st.dataframe(resultado.head(100), use_container_width=True)
-        st.subheader("📅 Resumen mensual")
-        st.dataframe(mensual, use_container_width=True)
-        csv = resultado.to_csv(index=False).encode("utf-8")
-        st.download_button("Descargar resultados (CSV)", csv, "resultados_bess.csv")
-        csv_m = mensual.to_csv().encode("utf-8")
-        st.download_button("Descargar resumen mensual (CSV)", csv_m, "resumen_mensual.csv")
-
-    with tab_graf:
-        dia = st.slider(
-            "Día a visualizar",
-            min_value=fi_date,
-            max_value=ff_date,
-            value=st.session_state.get("dia_graf", fi_date),
-            format="YYYY-MM-DD",
-            key="dia_graf",
-        )
-        diario = resultado[resultado["Fecha"].dt.date == dia]
-        if not diario.empty:
-            fig_d = make_subplots(specs=[[{"secondary_y": True}]])
-            fig_d.add_trace(
-                go.Scatter(x=diario["Fecha"], y=diario["Precio"], name="Precio"),
-                secondary_y=False,
-            )
-            fig_d.add_trace(
-                go.Scatter(x=diario["Fecha"], y=diario["SOC (MWh)"], name="SOC (MWh)"),
-                secondary_y=True,
-            )
-            fig_d.update_layout(title=f"Precio y SOC - {dia}")
-            fig_d.update_yaxes(title_text="Precio", secondary_y=False)
-            fig_d.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
-            st.plotly_chart(fig_d, use_container_width=True)
-        else:
-            st.info("No hay datos para ese día")
-
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(
-            go.Scatter(x=resultado["Fecha"], y=resultado["Precio"], name="Precio"),
-            secondary_y=False,
-        )
-        fig.add_trace(
-            go.Scatter(x=resultado["Fecha"], y=resultado["SOC (MWh)"], name="SOC (MWh)"),
-            secondary_y=True,
-        )
-        fig.update_layout(title="Precio y Estado de Carga")
-        fig.update_yaxes(title_text="Precio", secondary_y=False)
-        fig.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
-        st.plotly_chart(fig, use_container_width=True)
-        fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio (€)", title="Beneficio mensual")
-        st.plotly_chart(fig_b, use_container_width=True)
 
         years = list(range(16))
         colores = ["blue" if v >= 0 else "red" for v in flujos_anuales]
@@ -560,20 +539,10 @@ elif st.session_state["resultado"] is not None:
         fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja anual")
         st.plotly_chart(fig_cash, use_container_width=True)
 
-    with tab_ind:
-        st.subheader("📊 Indicadores económicos")
-        info_text = textwrap.dedent(
-            f"""
-            - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
-            - **Inversión inicial**: {inversion:,.0f} €
-            - **VAN (15 años)**: {van:,.0f} €
-            - **TIR proyecto**: {tir*100:.2f} %
-            - **TIR equity**: {tir_equity*100:.2f} %
-            - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
-            - **Degradación anual**: {degradacion:.1f} %
-            {f"- **Duración óptima**: {horas_opt} h" if horas_opt else ""}
-            """
-        )
-        st.markdown(info_text)
+        colores_e = ["blue" if v >= 0 else "red" for v in flujos_equity_anual]
+        fig_eq = go.Figure()
+        fig_eq.add_bar(x=list(range(1, 16)), y=flujos_equity_anual, name="Flujo equity", marker_color=colores_e)
+        fig_eq.update_layout(xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja equity")
+        st.plotly_chart(fig_eq, use_container_width=True)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
