@@ -664,4 +664,3 @@ if iniciar:
         st.plotly_chart(fig_cash, use_container_width=True)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
-
