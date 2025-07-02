@@ -1,3 +1,8 @@
+
+---
+
+## `bess_simulador_app.py`
+```python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -342,8 +347,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil"
-            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil "
+            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
@@ -354,9 +359,11 @@ with st.sidebar:
             if analizar_marg
             else 0
         )
-    elif estrategia == "Programada":
-        horario_file = st.file_uploader("Horario (CSV con columnas hora,accion)", type="csv")
+    else:  # Programada
+        horario_file = st.file_uploader(
+            "Horario (CSV con columnas hora,accion)", type="csv")
 
+    st.markdown("### Parámetros económicos")
     coste_desarrollo_mw = st.slider(
         "Costes Desarrollo (€/MW)",
         min_value=10000,
@@ -401,7 +408,7 @@ with st.sidebar:
 3. En las pestañas de la derecha encontrarás los datos, las gráficas y los indicadores económicos.<br><br>
 **Estrategias**<br>
 - **Percentiles**: la batería se carga cuando el precio está por debajo del percentil indicado en *Umbral de carga* (por ejemplo 0.25) y se descarga por encima del valor elegido en *Umbral de descarga* (por ejemplo 0.75).<br>
- - **Margen fijo**: la media se calcula cada día. Se carga si el precio cae por debajo de la media diaria&nbsp;−&nbsp;margen y se descarga si supera la media diaria&nbsp;+&nbsp;margen. Ejemplo: con margen 10&nbsp;€/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
+- **Margen fijo**: la media se calcula cada día. Se carga si el precio cae por debajo de la media diaria − margen y se descarga si supera la media diaria + margen. Ejemplo: con margen 10 €/MWh y media 100, se compra a menos de 90 y se vende por encima de 110.<br>
 - **Programada**: se suministra un CSV con columnas `hora` y `accion` (C=cargar, D=descargar) que define las horas de operación diaria, por ejemplo `0,C` `1,C` `16,D` `17,D`.
 </small>
 """
@@ -608,7 +615,8 @@ if iniciar:
             resultado[resultado["Fecha"].dt.year == year_sel]["Fecha"].dt.month.unique()
         )
         month_sel = st.selectbox("Mes", months_avail, key="sel_month2")
-        periodo = resultado[(resultado["Fecha"].dt.year == year_sel) & (resultado["Fecha"].dt.month == month_sel)]
+        periodo = resultado[(resultado["Fecha"].dt.year == year_sel) &
+                            (resultado["Fecha"].dt.month == month_sel)]
         if not periodo.empty:
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             fig.add_trace(
@@ -627,28 +635,6 @@ if iniciar:
             st.info("No hay datos para ese período")
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio neto (€)", title="Beneficio mensual")
         st.plotly_chart(fig_b, use_container_width=True)
-
-        if sens_df is not None:
-            fig_s = px.line(
-                sens_df,
-                x="Duración (h)",
-                y="VAN",
-                markers=True,
-                title="VAN según duración",
-            )
-            fig_s.add_vline(x=horas_opt, line_dash="dash", line_color="red")
-            st.plotly_chart(fig_s, use_container_width=True)
-
-        if sens_mar is not None:
-            fig_m = px.line(
-                sens_mar,
-                x="Margen (€/MWh)",
-                y="TIR",
-                markers=True,
-                title="TIR según margen",
-            )
-            fig_m.add_vline(x=margen_opt, line_dash="dash", line_color="red")
-            st.plotly_chart(fig_m, use_container_width=True)
 
     with tab_ind:
         st.subheader("📊 Resultados económicos")
@@ -678,3 +664,4 @@ if iniciar:
         st.plotly_chart(fig_cash, use_container_width=True)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
+
