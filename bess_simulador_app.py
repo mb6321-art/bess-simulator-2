@@ -34,7 +34,7 @@ RESULT_KEYS = [
 ]
 
 def reset_sidebar():
-    """Clear session state and reload the app."""
+    """Limpia el estado de la sesión y recarga la app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -59,11 +59,11 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Initialize session state variables for results
+# Inicializa las claves en session_state
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
-# --- Cargar datos ---
+# --- Cargar datos -----------------------------------------------------------
 @st.cache_data
 def cargar_datos(zona, archivo=None):
     if archivo is not None:
@@ -88,7 +88,7 @@ def cargar_datos(zona, archivo=None):
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
 
-# --- Simulación ---
+# --- Simulación -------------------------------------------------------------
 def simular(
     precios,
     potencia_mw,
@@ -193,7 +193,7 @@ def analizar_duracion(
     coste_carga,
     coste_descarga,
 ):
-    """Calculate VAN for each duration from 1 to max_h."""
+    """Calcula VAN para cada duración desde 1 hasta max_h."""
     datos = []
     for h in range(1, max_h + 1):
         res = simular(
@@ -223,7 +223,7 @@ def analizar_duracion(
     opt = df.loc[df["VAN"].idxmax(), "Duración (h)"]
     return df, opt
 
-# --- Interfaz ---
+# --- Interfaz ---------------------------------------------------------------
 st.title("🔋 Simulador de BESS")
 
 with st.sidebar:
@@ -510,10 +510,10 @@ if iniciar:
                 x="Duración (h)",
                 y="VAN",
                 markers=True,
-                title="VAN según duración",
             )
             fig_s.add_vline(x=horas_opt, line_dash="dash", line_color="red")
             st.plotly_chart(fig_s, use_container_width=True)
+
     with tab_ind:
         st.subheader("📊 Resultados económicos")
         info_text = textwrap.dedent(
@@ -530,19 +530,27 @@ if iniciar:
         )
         st.markdown(info_text)
 
-        years = list(range(16))
-        colores = ["blue" if v >= 0 else "red" for v in flujos_anuales]
+        colores = ["blue" if v >= 0 else "red" for v in flujo_anual]
         fig_cash = go.Figure()
         fig_cash.add_bar(x=[0], y=[-capex_bateria], name="CAPEX", marker_color="red")
         fig_cash.add_bar(x=[0], y=[-coste_desarrollo], name="Coste desarrollo", marker_color="orange")
-        fig_cash.add_bar(x=list(range(1, 16)), y=flujos_anuales, name="Flujo neto", marker_color=colores)
-        fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja anual")
+        fig_cash.add_bar(x=list(range(1, 16)), y=flujo_anual, name="Flujo neto", marker_color=colores)
+        fig_cash.update_layout(
+            barmode="stack",
+            xaxis_title="Año",
+            yaxis_title="Flujo de caja (€)",
+            title="Flujo de caja anual",
+        )
         st.plotly_chart(fig_cash, use_container_width=True)
 
         colores_e = ["blue" if v >= 0 else "red" for v in flujos_equity_anual]
         fig_eq = go.Figure()
         fig_eq.add_bar(x=list(range(1, 16)), y=flujos_equity_anual, name="Flujo equity", marker_color=colores_e)
-        fig_eq.update_layout(xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja equity")
+        fig_eq.update_layout(
+            xaxis_title="Año",
+            yaxis_title="Flujo de caja (€)",
+            title="Flujo de caja equity",
+        )
         st.plotly_chart(fig_eq, use_container_width=True)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
