@@ -10,6 +10,12 @@ import os
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 
+
+def fmt_miles_eur(valor: float) -> str:
+    """Formato europeo en miles de euros con dos decimales."""
+    res = valor / 1000
+    return f"{res:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 RESULT_KEYS = [
     "resultado",
     "mensual",
@@ -312,7 +318,6 @@ def analizar_margen(
     df = pd.DataFrame(datos)
     opt = df.loc[df["TIR"].idxmax(), "Margen (€/MWh)"]
     return df, opt
-
 # --- Interfaz ---
 st.title("🔋 Simulador de BESS")
 
@@ -439,7 +444,7 @@ with st.sidebar:
 4. Usa **Restablecer parámetros** para volver al estado inicial.<br><br>
 **Estrategias disponibles**<br>
 - <b>Percentiles</b>: se carga por debajo del `Umbral de carga` y se descarga por encima del `Umbral de descarga` calculados día a día.<br>
-- <b>Margen fijo</b>: la referencia es la media diaria; se compra si el precio baja de media − margen y se vende por encima de media + margen.<br>
+- <b>Margen fijo</b>: la referencia es la media diaria; se compra si el precio baja de media&nbsp;&minus;&nbsp;margen y se vende por encima de media&nbsp;+&nbsp;margen.<br>
 - <b>Programada</b>: sube un CSV con columnas `hora` y `accion` (C o D) para fijar manualmente la carga y descarga.<br><br>
 Tras la simulación se abren tres pestañas:<br>
 - <em>Resultados</em> muestra tablas y enlaces de descarga.<br>
@@ -598,11 +603,14 @@ if iniciar:
     cuenta_df = pd.DataFrame.from_dict(
         data_cr, orient="index", columns=[f"Año {i}" for i in range(16)]
     )
-    cuenta_df_fmt = cuenta_df.applymap(
-        lambda x: f"{x:,.0f}".replace(",", ".").replace(".00", "")
-    )
+    cuenta_df.index.name = "Concepto"
+    cuenta_miles = cuenta_df / 1000
+    cuenta_df_fmt = cuenta_miles.applymap(fmt_miles_eur)
 
-    ciclos_anuales = resultado["Descarga (MWh)"].sum() / potencia_mw / duracion_h
+    total_descarga = resultado["Descarga (MWh)"].sum()
+    ciclos_periodo = total_descarga / (potencia_mw * duracion_h)
+    dias_periodo = (fecha_fin_dt - fi_dt).days + 1
+    ciclos_anuales = ciclos_periodo / (dias_periodo / 365)
 
     st.session_state.update(
         {
@@ -722,13 +730,14 @@ if iniciar:
             )
             fig_m.add_vline(x=margen_opt, line_dash="dash", line_color="red")
             st.plotly_chart(fig_m, use_container_width=True)
+
     with tab_ind:
         st.subheader("📊 Resultados económicos")
         info_text = textwrap.dedent(
             f"""
-            - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
-            - **Inversión inicial**: {inversion:,.0f} €
-            - **VAN (15 años)**: {van:,.0f} €
+            - **Ingreso anual estimado**: {fmt_miles_eur(ingreso_anual)}
+            - **Inversión inicial**: {fmt_miles_eur(inversion)}
+            - **VAN (15 años)**: {fmt_miles_eur(van)}
             - **TIR proyecto**: {tir*100:.2f} %
             - **TIR equity**: {tir_equity*100:.2f} %
             - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
@@ -741,16 +750,148 @@ if iniciar:
 
         years = list(range(16))
         fig_cash = go.Figure()
-        fig_cash.add_bar(x=[0], y=[-capex_bateria], name="CAPEX", marker_color="red")
-        fig_cash.add_bar(x=[0], y=[-coste_desarrollo], name="Coste desarrollo", marker_color="orange")
+        fig_cash.add_bar(x=[0], y=[-capex_bateria / 1000], name="CAPEX", marker_color="red")
+        fig_cash.add_bar(x=[0], y=[-coste_desarrollo / 1000], name="Coste desarrollo", marker_color="orange")
         if tipo_terreno == "Compra":
-            fig_cash.add_bar(x=[0], y=[-coste_terreno], name="Terreno", marker_color="brown")
-        fig_cash.add_bar(x=list(range(1, 16)), y=[-a for a in amortizacion_anual], name="Amortización", marker_color="lightcoral")
-        fig_cash.add_bar(x=list(range(1, 16)), y=[-i for i in intereses_anuales], name="Intereses", marker_color="pink")
-        fig_cash.add_bar(x=list(range(1, 16)), y=flujos_equity_anual, name="Flujo equity", marker_color="blue")
-        fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja anual")
+            fig_cash.add_bar(x=[0], y=[-coste_terreno / 1000], name="Terreno", marker_color="brown")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[-a / 1000 for a in amortizacion_anual], name="Amortización", marker_color="lightcoral")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[-i / 1000 for i in intereses_anuales], name="Intereses", marker_color="pink")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[f / 1000 for f in flujos_equity_anual], name="Flujo equity", marker_color="blue")
+        fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (miles de €)", title="Flujo de caja anual")
         st.plotly_chart(fig_cash, use_container_width=True)
         st.subheader("📄 Cuenta de resultados")
+        st.caption("Valores en miles de euros")
+        st.dataframe(cuenta_df_fmt, use_container_width=True)
+        csv_cu = cuenta_df.to_csv().encode("utf-8")
+        st.download_button(
+            "Descargar cuenta de resultados (CSV)",
+            csv_cu,
+            "cuenta_resultados.csv",
+        )
+elif st.session_state["resultado"] is not None:
+    resultado = st.session_state["resultado"]
+    mensual = st.session_state["mensual"]
+    fi_date = st.session_state["fi_date"]
+    ff_date = st.session_state["ff_date"]
+    ingreso_anual = st.session_state["ingreso_anual"]
+    inversion = st.session_state["inversion"]
+    van = st.session_state["van"]
+    tir = st.session_state["tir"]
+    tir_equity = st.session_state["tir_equity"]
+    ciclos_anuales = st.session_state["ciclos_anuales"]
+    cyc_min = st.session_state["cyc_min"]
+    cyc_max = st.session_state["cyc_max"]
+    flujo_caja = st.session_state["flujo_caja"]
+    flujos_anuales = st.session_state["flujos_anuales"]
+    flujos_equity_anual = st.session_state["flujos_equity"]
+    intereses_anuales = st.session_state.get("intereses_anuales")
+    amortizacion_anual = st.session_state.get("amortizacion_anual")
+    capex_bateria = st.session_state["capex_bateria"]
+    coste_desarrollo = st.session_state["coste_desarrollo"]
+    coste_terreno = st.session_state.get("coste_terreno", 0.0)
+    tipo_terreno = st.session_state.get("tipo_terreno", "Compra")
+    degradacion = st.session_state["degradacion"]
+    sens_df = st.session_state.get("sens_dur")
+    horas_opt = st.session_state.get("horas_optimas")
+    sens_mar = st.session_state.get("sens_margen")
+    margen_opt = st.session_state.get("margen_optimo")
+
+    tab_res, tab_graf, tab_ind = st.tabs(["Resultados", "Gráficas", "Resultados económicos"])
+
+    with tab_res:
+        st.subheader("📈 Resultados horarios")
+        st.dataframe(resultado.head(100), use_container_width=True)
+        st.subheader("📅 Resumen mensual")
+        st.dataframe(mensual, use_container_width=True)
+        csv = resultado.to_csv(index=False).encode("utf-8")
+        st.download_button("Descargar resultados (CSV)", csv, "resultados_bess.csv")
+        csv_m = mensual.to_csv().encode("utf-8")
+        st.download_button("Descargar resumen mensual (CSV)", csv_m, "resumen_mensual.csv")
+
+    with tab_graf:
+        dia = st.slider(
+            "Día a visualizar",
+            min_value=fi_date,
+            max_value=ff_date,
+            value=st.session_state.get("dia_graf", fi_date),
+            format="YYYY-MM-DD",
+            key="dia_graf",
+        )
+        diario = resultado[resultado["Fecha"].dt.date == dia]
+        if not diario.empty:
+            fig_d = make_subplots(specs=[[{"secondary_y": True}]])
+            fig_d.add_trace(
+                go.Scatter(x=diario["Fecha"], y=diario["Precio"], name="Precio"),
+                secondary_y=False,
+            )
+            fig_d.add_trace(
+                go.Scatter(x=diario["Fecha"], y=diario["SOC (MWh)"], name="SOC (MWh)"),
+                secondary_y=True,
+            )
+            fig_d.update_layout(title=f"Precio y SOC - {dia}")
+            fig_d.update_yaxes(title_text="Precio", secondary_y=False)
+            fig_d.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
+            st.plotly_chart(fig_d, use_container_width=True)
+        else:
+            st.info("No hay datos para ese día")
+
+        years_avail = sorted(resultado["Fecha"].dt.year.unique())
+        year_sel = st.selectbox("Año", years_avail, key="sel_year2")
+        months_avail = sorted(
+            resultado[resultado["Fecha"].dt.year == year_sel]["Fecha"].dt.month.unique()
+        )
+        month_sel = st.selectbox("Mes", months_avail, key="sel_month2")
+        periodo = resultado[(resultado["Fecha"].dt.year == year_sel) & (resultado["Fecha"].dt.month == month_sel)]
+        if not periodo.empty:
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig.add_trace(
+                go.Scatter(x=periodo["Fecha"], y=periodo["Precio"], name="Precio"),
+                secondary_y=False,
+            )
+            fig.add_trace(
+                go.Scatter(x=periodo["Fecha"], y=periodo["SOC (MWh)"], name="SOC (MWh)"),
+                secondary_y=True,
+            )
+            fig.update_layout(title=f"Precio y Estado de Carga - {year_sel}-{month_sel:02d}")
+            fig.update_yaxes(title_text="Precio", secondary_y=False)
+            fig.update_yaxes(title_text="SOC (MWh)", secondary_y=True)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos para ese período")
+        fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio neto (€)", title="Beneficio mensual")
+        st.plotly_chart(fig_b, use_container_width=True)
+
+
+    with tab_ind:
+        st.subheader("📊 Resultados económicos")
+        info_text = textwrap.dedent(
+            f"""
+            - **Ingreso anual estimado**: {fmt_miles_eur(ingreso_anual)}
+            - **Inversión inicial**: {fmt_miles_eur(inversion)}
+            - **VAN (15 años)**: {fmt_miles_eur(van)}
+            - **TIR proyecto**: {tir*100:.2f} %
+            - **TIR equity**: {tir_equity*100:.2f} %
+            - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+            - **Degradación anual**: {degradacion:.1f} %
+            {f"- **Duración óptima**: {horas_opt} h" if horas_opt else ""}
+            {f"- **Margen óptimo**: {margen_opt} €/MWh" if margen_opt else ""}
+            """
+        )
+        st.markdown(info_text)
+
+        years = list(range(16))
+        fig_cash = go.Figure()
+        fig_cash.add_bar(x=[0], y=[-capex_bateria / 1000], name="CAPEX", marker_color="red")
+        fig_cash.add_bar(x=[0], y=[-coste_desarrollo / 1000], name="Coste desarrollo", marker_color="orange")
+        if tipo_terreno == "Compra":
+            fig_cash.add_bar(x=[0], y=[-coste_terreno / 1000], name="Terreno", marker_color="brown")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[-a / 1000 for a in amortizacion_anual], name="Amortización", marker_color="lightcoral")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[-i / 1000 for i in intereses_anuales], name="Intereses", marker_color="pink")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[f / 1000 for f in flujos_equity_anual], name="Flujo equity", marker_color="blue")
+        fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (miles de €)", title="Flujo de caja anual")
+        st.plotly_chart(fig_cash, use_container_width=True)
+        st.subheader("📄 Cuenta de resultados")
+        st.caption("Valores en miles de euros")
         cuenta_df_fmt = st.session_state.get("cuenta_resultados")
         if cuenta_df_fmt is not None:
             st.dataframe(cuenta_df_fmt, use_container_width=True)
