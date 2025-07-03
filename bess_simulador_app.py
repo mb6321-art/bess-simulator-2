@@ -436,59 +436,41 @@ with st.sidebar:
 1. Configura la zona, la tecnología y el tamaño de la batería.<br>
 2. Selecciona la estrategia de operación e introduce sus parámetros.<br>
 3. Ajusta los valores económicos y pulsa **Ejecutar simulación**.<br>
-4. Usa **Restablecer parámetros** para volver al estado inicial.<br><br>
-**Estrategias disponibles**<br>
-- <b>Percentiles</b>: se carga por debajo del `Umbral de carga` y se descarga por encima del `Umbral de descarga` calculados día a día.<br>
-- <b>Margen fijo</b>: la referencia es la media diaria; se compra si el precio baja de media&nbsp;&minus;&nbsp;margen y se vende por encima de media&nbsp;+&nbsp;margen.<br>
-- <b>Programada</b>: sube un CSV con columnas `hora` y `accion` (C o D) para fijar manualmente la carga y descarga.<br><br>
-Tras la simulación se abren tres pestañas:<br>
-- <em>Resultados</em> muestra tablas y enlaces de descarga.<br>
-- <em>Gráficas</em> incluye un deslizador para elegir el día y filtros por año/mes.<br>
-- <em>Resultados económicos</em> resume los flujos de caja y la TIR.<br>
+...
 </small>
-"""
+        """
         st.markdown(help_text, unsafe_allow_html=True)
 
 if iniciar:
     precios = cargar_datos(zona, archivo)
-    start_default = precios["Fecha"].min().date()
-    fecha_inicio = st.date_input("Desde", start_default)
-    fi_dt = pd.to_datetime(fecha_inicio)
-    fecha_fin_dt = fi_dt + relativedelta(years=15) - timedelta(days=1)
-    fecha_fin_dt = min(fecha_fin_dt, pd.to_datetime(precios["Fecha"].max()))
-    st.caption(f"Se simula hasta {fecha_fin_dt.date()} (máximo 15 años)")
-    precios = precios[(precios["Fecha"] >= fi_dt) &
-                      (precios["Fecha"] <= fecha_fin_dt)]
-    fi_date = fi_dt.date()
-    ff_date = fecha_fin_dt.date()
+    fi_dt = pd.to_datetime(precios["Fecha"].min()).date()
+    ff_dt = pd.to_datetime(precios["Fecha"].max()).date()
+    fi_date = st.date_input("Desde", fi_dt)
+    ff_date = st.date_input("Hasta", min(ff_dt, fi_dt + relativedelta(years=15)))
+    precios = precios[(precios["Fecha"].dt.date >= fi_date) &
+                      (precios["Fecha"].dt.date <= ff_date)]
 
     horario = None
     if estrategia == "Programada" and horario_file is not None:
         df_hor = pd.read_csv(horario_file)
         horario = {row["hora"]: row["accion"] for _, row in df_hor.iterrows()}
 
-    resultado = simular(
-        precios,
-        potencia_mw,
-        duracion_h,
-        ef_carga,
-        ef_descarga,
-        estrategia,
-        umbral_carga,
-        umbral_descarga,
-        margen,
-        horario,
-        coste_carga,
-        coste_descarga,
-    )
-
+    resultado = simular(precios, potencia_mw, duracion_h,
+                        ef_carga, ef_descarga, estrategia,
+                        umbral_carga, umbral_descarga, margen, horario,
+                        coste_carga, coste_descarga)
     mensual = resumen_mensual(resultado)
 
-    sens_df = None
-    horas_opt = None
-    sens_mar = None
-    margen_opt = None
-    if analizar_opt and max_h > 1:
+    fi_date = pd.to_datetime(fi_date)
+    ff_date = pd.to_datetime(ff_date)
+    fecha_inicio_dt = fi_date
+    fecha_fin_dt = ff_date
+    fi_date = fecha_inicio_dt.date()
+    ff_date = fecha_fin_dt.date()
+
+    sens_df = sens_mar = None
+    horas_opt = margen_opt = None
+    if analizar_opt:
         sens_df, horas_opt = analizar_duracion(
             precios,
             potencia_mw,
@@ -510,8 +492,7 @@ if iniciar:
             tipo_terreno,
             coste_terreno,
         )
-
-    if estrategia == "Margen fijo" and analizar_marg and max_margen > 0:
+    if analizar_marg:
         sens_mar, margen_opt = analizar_margen(
             precios,
             potencia_mw,
