@@ -37,10 +37,11 @@ RESULT_KEYS = [
     "margen_optimo",
     "coste_terreno",
     "tipo_terreno",
+    "cuenta_resultados",
 ]
 
 def reset_sidebar():
-    """Borra el estado y recarga la app."""
+    """Limpia el estado de la sesión y recarga la app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -65,7 +66,7 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Inicializar variables en session_state
+# Inicializar variables de sesión
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
@@ -94,7 +95,7 @@ def cargar_datos(zona, archivo=None):
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
 
-# --- Simulación principal ---
+# --- Simulación ---
 def simular(
     precios,
     potencia_mw,
@@ -218,7 +219,7 @@ def analizar_duracion(
     tipo_terreno,
     coste_terreno,
 ):
-    """Calcula el VAN para cada duración hasta max_h horas."""
+    """Calcula VAN para cada duración de 1 a max_h."""
     datos = []
     for h in range(1, max_h + 1):
         res = simular(
@@ -275,7 +276,7 @@ def analizar_margen(
     coste_terreno,
     paso=1.0,
 ):
-    """Devuelve la TIR para márgenes desde 0 hasta max_margen."""
+    """Devuelve la TIR para márgenes de 0 a max_margen."""
     datos = []
     m = 0.0
     while m <= max_margen:
@@ -435,31 +436,19 @@ with st.sidebar:
 1. Configura la zona, la tecnología y el tamaño de la batería.<br>
 2. Selecciona la estrategia de operación e introduce sus parámetros.<br>
 3. Ajusta los valores económicos y pulsa **Ejecutar simulación**.<br>
-4. Usa **Restablecer parámetros** para volver al estado inicial.<br><br>
-**Estrategias disponibles**<br>
-- <b>Percentiles</b>: se carga por debajo del `Umbral de carga` y se descarga por encima del `Umbral de descarga` calculados día a día.<br>
-- <b>Margen fijo</b>: la referencia es la media diaria; se compra si el precio baja de media&nbsp;&minus;&nbsp;margen y se vende por encima de media&nbsp;+&nbsp;margen.<br>
-- <b>Programada</b>: sube un CSV con columnas `hora` y `accion` (C o D) para fijar manualmente la carga y descarga.<br><br>
-Tras la simulación se abren tres pestañas:<br>
-- <em>Resultados</em> muestra tablas y enlaces de descarga.<br>
-- <em>Gráficas</em> incluye un deslizador para elegir el día y filtros por año/mes.<br>
-- <em>Resultados económicos</em> resume los flujos de caja y la TIR.<br>
+4. Revisa los resultados en las pestañas inferiores.<br>
+5. Usa los botones de descarga para guardar tablas en CSV.
 </small>
 """
         st.markdown(help_text, unsafe_allow_html=True)
 
 if iniciar:
     precios = cargar_datos(zona, archivo)
-    start_default = precios["Fecha"].min().date()
-    fecha_inicio = st.date_input("Desde", start_default)
-    fi_dt = pd.to_datetime(fecha_inicio)
-    fecha_fin_dt = fi_dt + relativedelta(years=15) - timedelta(days=1)
-    fecha_fin_dt = min(fecha_fin_dt, pd.to_datetime(precios["Fecha"].max()))
-    st.caption(f"Se simula hasta {fecha_fin_dt.date()} (máximo 15 años)")
-    precios = precios[(precios["Fecha"] >= fi_dt) &
-                      (precios["Fecha"] <= fecha_fin_dt)]
-    fi_date = fi_dt.date()
-    ff_date = fecha_fin_dt.date()
+    fi_date = st.date_input("Desde", precios["Fecha"].min())
+    ff_date = st.date_input("Hasta", precios["Fecha"].max())
+    fi_dt = pd.to_datetime(fi_date)
+    ff_dt = pd.to_datetime(ff_date)
+    precios = precios[(precios["Fecha"] >= fi_dt) & (precios["Fecha"] <= ff_dt)]
 
     horario = None
     if estrategia == "Programada" and horario_file is not None:
@@ -510,7 +499,7 @@ if iniciar:
             coste_terreno,
         )
 
-    if analizar_marg and max_margen > 0:
+    if estrategia == "Margen fijo" and analizar_marg and max_margen > 0:
         sens_mar, margen_opt = analizar_margen(
             precios,
             potencia_mw,
@@ -579,9 +568,19 @@ if iniciar:
         amortizacion_anual.append(principal_anual)
     tir_equity = npf.irr(flujo_equity)
 
+    cuenta_df = pd.DataFrame({
+        "Año": list(range(1, 16)),
+        "Ingresos (€)": ingresos,
+        "OPEX (€)": [-potencia_mw * 1000 * opex_kw] * 15,
+        "Terreno (€)": [-gasto_terreno] * 15,
+        "Intereses (€)": [-i for i in intereses_anuales],
+        "Amortización (€)": [-a for a in amortizacion_anual],
+        "Flujo equity (€)": flujos_equity_anual,
+    })
+
     total_descarga = resultado["Descarga (MWh)"].sum()
     ciclos_periodo = total_descarga / (potencia_mw * duracion_h)
-    dias_periodo = (fecha_fin_dt - fi_dt).days + 1
+    dias_periodo = (ff_dt - fi_dt).days + 1
     ciclos_anuales = ciclos_periodo / (dias_periodo / 365)
 
     st.session_state.update(
@@ -612,6 +611,7 @@ if iniciar:
             "horas_optimas": horas_opt,
             "sens_margen": sens_mar,
             "margen_optimo": margen_opt,
+            "cuenta_resultados": cuenta_df,
         }
     )
 
@@ -730,5 +730,15 @@ if iniciar:
         fig_cash.add_bar(x=list(range(1, 16)), y=flujos_equity_anual, name="Flujo equity", marker_color="blue")
         fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja anual")
         st.plotly_chart(fig_cash, use_container_width=True)
+        st.subheader("📄 Cuenta de resultados")
+        cuenta_df = st.session_state.get("cuenta_resultados")
+        if cuenta_df is not None:
+            st.dataframe(cuenta_df, use_container_width=True)
+            csv_cu = cuenta_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Descargar cuenta de resultados (CSV)",
+                csv_cu,
+                "cuenta_resultados.csv",
+            )
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
