@@ -38,7 +38,7 @@ RESULT_KEYS = [
 ]
 
 def reset_sidebar():
-    """Clear session state and reload the app."""
+    """Restablece la barra lateral y recarga la app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -63,11 +63,11 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Initialize session state variables for results
+# Inicializa variables en session_state
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
-# --- Cargar datos ---
+# --- Cargar datos -----------------------------------------------------------
 @st.cache_data
 def cargar_datos(zona, archivo=None):
     if archivo is not None:
@@ -92,7 +92,7 @@ def cargar_datos(zona, archivo=None):
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
 
-# --- Simulación ---
+# --- Simulación -------------------------------------------------------------
 def simular(
     precios,
     potencia_mw,
@@ -214,7 +214,7 @@ def analizar_duracion(
     coste_carga,
     coste_descarga,
 ):
-    """Calculate VAN for each duration from 1 to max_h."""
+    """Calcula VAN para cada duración de 1 a max_h."""
     datos = []
     for h in range(1, max_h + 1):
         res = simular(
@@ -264,7 +264,7 @@ def analizar_margen(
     coste_descarga,
     paso=1.0,
 ):
-    """Return TIR for margins from 0 to max_margen."""
+    """Devuelve TIR para márgenes desde 0 hasta max_margen."""
     datos = []
     m = 0.0
     while m <= max_margen:
@@ -296,7 +296,7 @@ def analizar_margen(
     opt = df.loc[df["TIR"].idxmax(), "Margen (€/MWh)"]
     return df, opt
 
-# --- Interfaz ---
+# --- Interfaz ---------------------------------------------------------------
 st.title("🔋 Simulador de BESS")
 
 with st.sidebar:
@@ -344,7 +344,7 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil"
+            "La batería se carga cuando el precio está por debajo del percentil "
             "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
@@ -620,8 +620,7 @@ if iniciar:
             resultado[resultado["Fecha"].dt.year == year_sel]["Fecha"].dt.month.unique()
         )
         month_sel = st.selectbox("Mes", months_avail, key="sel_month")
-        periodo = resultado[(resultado["Fecha"].dt.year == year_sel) &
-                            (resultado["Fecha"].dt.month == month_sel)]
+        periodo = resultado[(resultado["Fecha"].dt.year == year_sel) & (resultado["Fecha"].dt.month == month_sel)]
         if not periodo.empty:
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             fig.add_trace(
@@ -662,5 +661,32 @@ if iniciar:
             )
             fig_m.add_vline(x=margen_opt, line_dash="dash", line_color="red")
             st.plotly_chart(fig_m, use_container_width=True)
+
+    with tab_ind:
+        st.subheader("📊 Resultados económicos")
+        info_text = textwrap.dedent(
+            f"""
+            - **Ingreso anual estimado**: {ingreso_anual:,.0f} €
+            - **Inversión inicial**: {inversion:,.0f} €
+            - **VAN (15 años)**: {van:,.0f} €
+            - **TIR proyecto**: {tir*100:.2f} %
+            - **TIR equity**: {tir_equity*100:.2f} %
+            - **Ciclos usados al año**: {ciclos_anuales:.1f} (vida útil {cyc_min}-{cyc_max} ciclos)
+            - **Degradación anual**: {degradacion:.1f} %
+            {f"- **Duración óptima**: {horas_opt} h" if horas_opt else ""}
+            {f"- **Margen óptimo**: {margen_opt} €/MWh" if margen_opt else ""}
+            """
+        )
+        st.markdown(info_text)
+
+        years = list(range(16))
+        fig_cash = go.Figure()
+        fig_cash.add_bar(x=[0], y=[-capex_bateria], name="CAPEX", marker_color="red")
+        fig_cash.add_bar(x=[0], y=[-coste_desarrollo], name="Coste desarrollo", marker_color="orange")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[-a for a in amortizacion_anual], name="Amortización", marker_color="lightcoral")
+        fig_cash.add_bar(x=list(range(1, 16)), y=[-i for i in intereses_anuales], name="Intereses", marker_color="pink")
+        fig_cash.add_bar(x=list(range(1, 16)), y=flujos_equity_anual, name="Flujo equity", marker_color="blue")
+        fig_cash.update_layout(barmode="stack", xaxis_title="Año", yaxis_title="Flujo de caja (€)", title="Flujo de caja anual")
+        st.plotly_chart(fig_cash, use_container_width=True)
 else:
     st.info("Configura los parámetros en la barra lateral y pulsa Ejecutar.")
