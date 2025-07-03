@@ -35,10 +35,12 @@ RESULT_KEYS = [
     "amortizacion_anual",
     "sens_margen",
     "margen_optimo",
+    "coste_terreno",
+    "tipo_terreno",
 ]
 
 def reset_sidebar():
-    """Restablece la barra lateral y recarga la app."""
+    """Borra el estado y recarga la app."""
     for k in list(st.session_state.keys()):
         del st.session_state[k]
     st.experimental_rerun()
@@ -63,11 +65,11 @@ TECHS = {
 
 st.set_page_config(page_title="Simulador de BESS", layout="wide")
 
-# Inicializa variables en session_state
+# Inicializar variables en session_state
 for k in RESULT_KEYS:
     st.session_state.setdefault(k, None)
 
-# --- Cargar datos -----------------------------------------------------------
+# --- Cargar datos ---
 @st.cache_data
 def cargar_datos(zona, archivo=None):
     if archivo is not None:
@@ -92,7 +94,7 @@ def cargar_datos(zona, archivo=None):
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df
 
-# --- Simulación -------------------------------------------------------------
+# --- Simulación principal ---
 def simular(
     precios,
     potencia_mw,
@@ -213,8 +215,10 @@ def analizar_duracion(
     tasa_descuento,
     coste_carga,
     coste_descarga,
+    tipo_terreno,
+    coste_terreno,
 ):
-    """Calcula VAN para cada duración de 1 a max_h."""
+    """Calcula el VAN para cada duración hasta max_h horas."""
     datos = []
     for h in range(1, max_h + 1):
         res = simular(
@@ -235,9 +239,14 @@ def analizar_duracion(
         capex_bat = potencia_mw * h * 1000 * capex_kwh
         coste_dev = potencia_mw * coste_desarrollo_mw
         capex_total = capex_bat + coste_dev
+        if tipo_terreno == "Compra":
+            capex_total += coste_terreno
+            gasto_terreno = 0
+        else:
+            gasto_terreno = coste_terreno
         inversion = -capex_total
         ingresos = [ingreso_anual * (1 - degradacion / 100) ** i for i in range(15)]
-        flujo = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw for i in range(15)]
+        flujo = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw - gasto_terreno for i in range(15)]
         van = npf.npv(tasa_descuento / 100, flujo)
         datos.append({"Duración (h)": h, "VAN": van})
     df = pd.DataFrame(datos)
@@ -262,9 +271,11 @@ def analizar_margen(
     tasa_descuento,
     coste_carga,
     coste_descarga,
+    tipo_terreno,
+    coste_terreno,
     paso=1.0,
 ):
-    """Devuelve TIR para márgenes desde 0 hasta max_margen."""
+    """Devuelve la TIR para márgenes desde 0 hasta max_margen."""
     datos = []
     m = 0.0
     while m <= max_margen:
@@ -286,9 +297,14 @@ def analizar_margen(
         capex_bat = potencia_mw * duracion_h * 1000 * capex_kwh
         coste_dev = potencia_mw * coste_desarrollo_mw
         capex_total = capex_bat + coste_dev
+        if tipo_terreno == "Compra":
+            capex_total += coste_terreno
+            gasto_terreno = 0
+        else:
+            gasto_terreno = coste_terreno
         inversion = -capex_total
         ingresos = [ingreso_anual * (1 - degradacion / 100) ** i for i in range(15)]
-        flujo = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw for i in range(15)]
+        flujo = [inversion] + [ingresos[i] - potencia_mw * 1000 * opex_kw - gasto_terreno for i in range(15)]
         tir = npf.irr(flujo)
         datos.append({"Margen (€/MWh)": m, "TIR": tir})
         m += paso
@@ -296,7 +312,7 @@ def analizar_margen(
     opt = df.loc[df["TIR"].idxmax(), "Margen (€/MWh)"]
     return df, opt
 
-# --- Interfaz ---------------------------------------------------------------
+# --- Interfaz ---
 st.title("🔋 Simulador de BESS")
 
 with st.sidebar:
@@ -344,8 +360,8 @@ with st.sidebar:
         umbral_carga = st.slider("Umbral de carga", 0.0, 1.0, 0.25, 0.05)
         umbral_descarga = st.slider("Umbral de descarga", 0.0, 1.0, 0.75, 0.05)
         st.caption(
-            "La batería se carga cuando el precio está por debajo del percentil "
-            "seleccionado en 'Umbral de carga' y se descarga cuando supera el "
+            "La batería se carga cuando el precio está por debajo del percentil"
+            " seleccionado en 'Umbral de carga' y se descarga cuando supera el "
             "percentil indicado en 'Umbral de descarga'."
         )
     elif estrategia == "Margen fijo":
@@ -385,6 +401,19 @@ with st.sidebar:
     coste_carga = st.number_input("Coste carga (€/MWh)", value=2.0)
     coste_descarga = st.number_input(
         "Coste descarga (€/MWh)", value=2.0
+    )
+    tipo_terreno = st.selectbox(
+        "Tipo de coste terrenos",
+        ["Compra", "DDS (anual)"]
+    )
+    coste_terreno = st.number_input(
+        "Coste terrenos (€)",
+        value=0.0,
+        step=1000.0,
+    )
+    st.caption(
+        "Si es Compra, el importe se añade al CAPEX inicial. "
+        "Con DDS se paga cada año."
     )
 
     st.markdown("---")
@@ -477,9 +506,11 @@ if iniciar:
             tasa_descuento,
             coste_carga,
             coste_descarga,
+            tipo_terreno,
+            coste_terreno,
         )
 
-    if estrategia == "Margen fijo" and analizar_marg and max_margen > 0:
+    if analizar_marg and max_margen > 0:
         sens_mar, margen_opt = analizar_margen(
             precios,
             potencia_mw,
@@ -498,15 +529,22 @@ if iniciar:
             tasa_descuento,
             coste_carga,
             coste_descarga,
+            tipo_terreno,
+            coste_terreno,
         )
 
     ingreso_anual = resultado["Beneficio neto (€)"].sum()
     capex_bateria = potencia_mw * duracion_h * 1000 * capex_kwh
     coste_desarrollo = potencia_mw * coste_desarrollo_mw
     capex_total = capex_bateria + coste_desarrollo
+    if tipo_terreno == "Compra":
+        capex_total += coste_terreno
+        gasto_terreno = 0
+    else:
+        gasto_terreno = coste_terreno
     inversion = -capex_total
     ingresos = [ingreso_anual * (1 - degradacion / 100) ** i for i in range(15)]
-    flujo_anual = [ingresos[i] - potencia_mw * 1000 * opex_kw for i in range(15)]
+    flujo_anual = [ingresos[i] - potencia_mw * 1000 * opex_kw - gasto_terreno for i in range(15)]
     flujo_caja = [inversion] + flujo_anual
     van = npf.npv(tasa_descuento / 100, flujo_caja)
     tir = npf.irr(flujo_caja)
@@ -532,10 +570,10 @@ if iniciar:
             principal_anual += principal_mes
         pago_total = interes_anual + principal_anual
         flujo_equity.append(
-            ingresos[year] - potencia_mw * 1000 * opex_kw - pago_total
+            ingresos[year] - potencia_mw * 1000 * opex_kw - gasto_terreno - pago_total
         )
         flujos_equity_anual.append(
-            ingresos[year] - potencia_mw * 1000 * opex_kw - pago_total
+            ingresos[year] - potencia_mw * 1000 * opex_kw - gasto_terreno - pago_total
         )
         intereses_anuales.append(interes_anual)
         amortizacion_anual.append(principal_anual)
@@ -567,6 +605,8 @@ if iniciar:
             "amortizacion_anual": amortizacion_anual,
             "capex_bateria": capex_bateria,
             "coste_desarrollo": coste_desarrollo,
+            "coste_terreno": coste_terreno,
+            "tipo_terreno": tipo_terreno,
             "degradacion": degradacion,
             "sens_dur": sens_df,
             "horas_optimas": horas_opt,
@@ -683,6 +723,8 @@ if iniciar:
         fig_cash = go.Figure()
         fig_cash.add_bar(x=[0], y=[-capex_bateria], name="CAPEX", marker_color="red")
         fig_cash.add_bar(x=[0], y=[-coste_desarrollo], name="Coste desarrollo", marker_color="orange")
+        if tipo_terreno == "Compra":
+            fig_cash.add_bar(x=[0], y=[-coste_terreno], name="Terreno", marker_color="brown")
         fig_cash.add_bar(x=list(range(1, 16)), y=[-a for a in amortizacion_anual], name="Amortización", marker_color="lightcoral")
         fig_cash.add_bar(x=list(range(1, 16)), y=[-i for i in intereses_anuales], name="Intereses", marker_color="pink")
         fig_cash.add_bar(x=list(range(1, 16)), y=flujos_equity_anual, name="Flujo equity", marker_color="blue")
