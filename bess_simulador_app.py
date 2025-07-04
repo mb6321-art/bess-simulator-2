@@ -11,10 +11,14 @@ from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 
 
+def fmt_eur(valor: float) -> str:
+    """Formatea un número usando el estilo europeo y sin decimales."""
+    return f"{valor:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def fmt_miles_eur(valor: float) -> str:
-    """Formato europeo en miles de euros con dos decimales."""
-    res = valor / 1000
-    return f"{res:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    """Formato europeo en miles de euros sin decimales."""
+    return fmt_eur(valor / 1000)
 
 RESULT_KEYS = [
     "resultado",
@@ -340,7 +344,7 @@ with st.sidebar:
     deg_max = deg_hi + 1.0
     deg_default = (deg_lo + deg_hi) / 2
     st.caption(
-        f"Vida útil estimada: {cyc_min:,}-{cyc_max:,} ciclos. "
+        f"Vida útil estimada: {fmt_eur(cyc_min)}-{fmt_eur(cyc_max)} ciclos. "
         f"Degradación típica {deg_lo}-{deg_hi}% anual"
     )
     degradacion = st.slider(
@@ -591,14 +595,12 @@ if iniciar:
     tir_equity = npf.irr(flujo_equity)
 
     opex_anual = -potencia_mw * 1000 * opex_kw
-    if tipo_terreno == "Compra":
-        terreno_fila = [-coste_terreno] + [0] * 15
-    else:
-        terreno_fila = [0] + [-coste_terreno] * 15
+    pago_terreno = -gasto_terreno
+
     data_cr = {
-        "Ingresos": [0] + ingresos,
-        "OPEX": [0] + [opex_anual] * 15,
-        "Coste terrenos": terreno_fila,
+        "Ingresos": [0] + flujo_anual,
+        "OPEX": [opex_anual] * 16,
+        "Coste terrenos": [pago_terreno] * 16,
         "Intereses": [0] + [-i for i in intereses_anuales],
         "Amortización": [0] + [-a for a in amortizacion_anual],
         "Coste desarrollo": [-coste_desarrollo] + [0] * 15,
@@ -736,6 +738,16 @@ if iniciar:
             fig_m.add_vline(x=margen_opt, line_dash="dash", line_color="red")
             st.plotly_chart(fig_m, use_container_width=True)
 
+        if sens_mar is not None:
+            fig_m = px.line(
+                sens_mar,
+                x="Margen (€/MWh)",
+                y="TIR",
+                markers=True,
+                title="TIR según margen",
+            )
+            fig_m.add_vline(x=margen_opt, line_dash="dash", line_color="red")
+            st.plotly_chart(fig_m, use_container_width=True)
     with tab_ind:
         st.subheader("📊 Resultados económicos")
         info_text = textwrap.dedent(
@@ -865,6 +877,7 @@ elif st.session_state["resultado"] is not None:
             st.info("No hay datos para ese período")
         fig_b = px.bar(mensual.reset_index(), x="Mes", y="Beneficio neto (€)", title="Beneficio mensual")
         st.plotly_chart(fig_b, use_container_width=True)
+
 
     with tab_ind:
         st.subheader("📊 Resultados económicos")
