@@ -595,12 +595,14 @@ if iniciar:
     tir_equity = npf.irr(flujo_equity)
 
     opex_anual = -potencia_mw * 1000 * opex_kw
-    pago_terreno = -gasto_terreno
-
+    if tipo_terreno == "Compra":
+        terreno_fila = [-coste_terreno] + [0] * 15
+    else:
+        terreno_fila = [0] + [-coste_terreno] * 15
     data_cr = {
-        "Ingresos": [0] + flujo_anual,
-        "OPEX": [opex_anual] * 16,
-        "Coste terrenos": [pago_terreno] * 16,
+        "Ingresos": [0] + ingresos,
+        "OPEX": [0] + [opex_anual] * 15,
+        "Coste terrenos": terreno_fila,
         "Intereses": [0] + [-i for i in intereses_anuales],
         "Amortización": [0] + [-a for a in amortizacion_anual],
         "Coste desarrollo": [-coste_desarrollo] + [0] * 15,
@@ -696,7 +698,8 @@ if iniciar:
             resultado[resultado["Fecha"].dt.year == year_sel]["Fecha"].dt.month.unique()
         )
         month_sel = st.selectbox("Mes", months_avail, key="sel_month")
-        periodo = resultado[(resultado["Fecha"].dt.year == year_sel) & (resultado["Fecha"].dt.month == month_sel)]
+        periodo = resultado[(resultado["Fecha"].dt.year == year_sel) &
+                            (resultado["Fecha"].dt.month == month_sel)]
         if not periodo.empty:
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             fig.add_trace(
@@ -738,16 +741,6 @@ if iniciar:
             fig_m.add_vline(x=margen_opt, line_dash="dash", line_color="red")
             st.plotly_chart(fig_m, use_container_width=True)
 
-        if sens_mar is not None:
-            fig_m = px.line(
-                sens_mar,
-                x="Margen (€/MWh)",
-                y="TIR",
-                markers=True,
-                title="TIR según margen",
-            )
-            fig_m.add_vline(x=margen_opt, line_dash="dash", line_color="red")
-            st.plotly_chart(fig_m, use_container_width=True)
     with tab_ind:
         st.subheader("📊 Resultados económicos")
         info_text = textwrap.dedent(
