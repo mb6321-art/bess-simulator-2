@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activos Inmobiliarios</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black:  #0a0a0a;
+    --gray1:  #333;
+    --gray2:  #666;
+    --gray3:  #999;
+    --gray4:  #ccc;
+    --gray5:  #eee;
+    --gray6:  #f7f7f7;
+    --white:  #fff;
+    --red:    #b91c1c;
+    --green:  #15643a;
+    --amber:  #92400e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--white); color: var(--black); font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.5; }
+
+/* HEADER */
+header {
+border-bottom: 1.5px solid var(--black);
+padding: 26px 52px;
+display: flex;
+justify-content: space-between;
+align-items: flex-end;
+}
+header h1 { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 3px; }
+header p  { font-size: 11px; color: var(--gray2); }
+.hdr-right { text-align: right; }
+.hdr-right .lbl { font-size: 10px; color: var(--gray3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+.hdr-right .val { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; color: var(--green); }
+
+/* LAYOUT */
+main { max-width: 1160px; margin: 0 auto; padding: 36px 52px 64px; }
+
+/* TABS */
+.tabs { display: flex; border-bottom: 1px solid var(--gray5); margin-bottom: 32px; gap: 0; }
+.tab  { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+padding: 8px 20px; font-size: 12px; font-family: 'Inter', sans-serif; font-weight: 500;
+color: var(--gray3); cursor: pointer; letter-spacing: 0.01em; transition: all .15s; }
+.tab:hover  { color: var(--black); }
+.tab.active { color: var(--black); border-bottom-color: var(--black); font-weight: 600; }
+
+/* KPI STRIP */
+.kpi-strip { display: grid; grid-template-columns: repeat(5,1fr); border: 1px solid var(--gray5); margin-bottom: 40px; }
+.kpi { padding: 18px 20px; border-right: 1px solid var(--gray5); }
+.kpi:last-child { border-right: none; }
+.kpi-label { font-size: 9px; color: var(--gray3); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500; margin-bottom: 7px; }
+.kpi-val   { font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; line-height: 1; margin-bottom: 3px; }
+.kpi-sub   { font-size: 10px; color: var(--gray3); }
+
+/* CHART SECTION */
+.chart-section { margin-bottom: 36px; }
+.chart-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; }
+.chart-title  { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 600; }
+.chart-sub    { font-size: 10px; color: var(--gray3); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+.legend { display: flex; gap: 20px; }
+.leg    { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--gray2); }
+.leg-mark { width: 22px; height: 2.5px; border-radius: 1px; flex-shrink: 0; }
+
+canvas { display: block; width: 100% !important; }
+
+/* MILESTONES */
+.ms-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 36px; }
+.ms     { border: 1px solid var(--gray5); border-left: 3px solid var(--amber); padding: 8px 14px; }
+.ms-yr  { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: var(--amber); }
+.ms-lbl { font-size: 10px; color: var(--gray3); }
+
+/* ADV SETTINGS */
+.adv-section { border-top: 1px solid var(--gray5); padding-top: 18px; margin-bottom: 32px; }
+.adv-trigger { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; background: none; border: none; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gray3); padding: 0; }
+.adv-trigger .caret { font-size: 8px; transition: transform .2s; }
+.adv-trigger.open .caret { transform: rotate(90deg); }
+.adv-panel { display: none; grid-template-columns: repeat(3,1fr); gap: 28px; padding-top: 18px; }
+.adv-panel.open { display: grid; }
+.adv-group label { font-size: 10px; color: var(--gray3); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 500; display: flex; justify-content: space-between; margin-bottom: 7px; }
+.adv-group label span { color: var(--black); font-weight: 600; letter-spacing: 0; }
+input[type=range] { width: 100%; accent-color: var(--black); height: 2px; cursor: pointer; }
+
+/* TABLE SECTION */
+.table-section { border-top: 1px solid var(--gray5); padding-top: 18px; }
+.table-trigger { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.table-trigger .ttitle { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 600; }
+.table-trigger .arrow  { font-size: 10px; color: var(--gray3); margin-left: auto; transition: transform .2s; }
+.table-trigger.open .arrow { transform: rotate(180deg); }
+.table-body { display: none; padding-top: 20px; }
+.table-body.open { display: block; }
+.table-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.table-controls-right { display: flex; gap: 4px; }
+.vbtn { background: none; border: 1px solid var(--gray4); padding: 5px 14px; font-size: 10px; font-family: 'Inter', sans-serif; font-weight: 500; cursor: pointer; color: var(--gray3); text-transform: uppercase; letter-spacing: 0.06em; transition: all .15s; }
+.vbtn.active { background: var(--black); color: var(--white); border-color: var(--black); }
+
+table { width: 100%; border-collapse: collapse; }
+thead th { font-size: 9px; color: var(--gray3); text-transform: uppercase; letter-spacing: 0.09em; padding: 9px 12px; text-align: right; font-weight: 500; border-bottom: 1px solid var(--gray5); background: var(--gray6); }
+thead th:first-child { text-align: left; }
+tbody td { padding: 8px 12px; font-size: 11.5px; text-align: right; border-bottom: 1px solid var(--gray6); color: var(--gray2); }
+tbody td:first-child { text-align: left; color: var(--gray3); font-weight: 500; }
+tbody tr:hover td { background: var(--gray6); }
+tbody tr.now td   { background: #fefff8; }
+tbody tr.now td:first-child { color: var(--black); font-weight: 600; }
+.pill { display: inline-block; font-size: 8px; padding: 1px 5px; border: 1px solid var(--amber); color: var(--amber); letter-spacing: 0.04em; margin-left: 5px; vertical-align: middle; }
+.bar-cell { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.mini-track { width: 48px; height: 3px; background: var(--gray5); }
+.mini-fill  { height: 100%; background: var(--green); }
+
+/* TOOLTIP */
+#tt { position: fixed; background: var(--black); color: var(--white); padding: 11px 15px; font-size: 11px; pointer-events: none; opacity: 0; transition: opacity .1s; z-index: 999; min-width: 175px; }
+.tt-yr  { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+.tt-row { display: flex; justify-content: space-between; gap: 14px; padding: 2px 0; color: #888; font-size: 10px; }
+.tt-row strong { color: var(--white); font-weight: 500; }
+</style>
+
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Activos Inmobiliarios</h1>
+    <p>Bonaut Prieto Mario &nbsp;·&nbsp; Madrid &nbsp;·&nbsp; Roma Volturno 31 &nbsp;·&nbsp; Feb 2026</p>
+  </div>
+  <div class="hdr-right">
+    <div class="lbl">Patrimonio neto inmobiliario</div>
+    <div class="val" id="hdr-total">—</div>
+  </div>
+</header>
+
+<main>
+
+  <div class="tabs">
+    <button class="tab active" onclick="setProp('madrid',this)">Madrid</button>
+    <button class="tab" onclick="setProp('roma',this)">Roma — Volturno 31</button>
+    <button class="tab" onclick="setProp('total',this)">Visión conjunta</button>
+  </div>
+
+  <div class="kpi-strip" id="kpi-strip"></div>
+
+  <div class="chart-section">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title" id="chart-title">Evolución del activo</div>
+        <div class="chart-sub">Proyección anual hasta cancelación · pasa el ratón para ver cada año</div>
+      </div>
+      <div class="legend">
+        <div class="leg"><div class="leg-mark" style="background:var(--black)"></div>Valor piso</div>
+        <div class="leg"><div class="leg-mark" style="background:var(--red);height:2px;background:repeating-linear-gradient(90deg,var(--red) 0,var(--red) 5px,transparent 5px,transparent 9px)"></div>Deuda</div>
+        <div class="leg"><div class="leg-mark" style="background:var(--green)"></div>Patrimonio neto</div>
+      </div>
+    </div>
+    <canvas id="main-chart" height="340"></canvas>
+  </div>
+
+  <div class="ms-row" id="ms-row"></div>
+
+  <div class="adv-section">
+    <button class="adv-trigger" onclick="toggleAdv(this)">
+      <span class="caret">▶</span> Ajustar supuestos
+    </button>
+    <div class="adv-panel" id="adv-panel">
+      <div class="adv-group">
+        <label>Valor vivienda 2026 <span id="adv-lv">—</span></label>
+        <input type="range" id="adv-v" min="200000" max="800000" step="5000" oninput="onAdv()">
+      </div>
+      <div class="adv-group">
+        <label>Revalorización anual <span id="adv-lr">2,50%</span></label>
+        <input type="range" id="adv-r" min="0" max="8" step="0.25" value="2.5" oninput="onAdv()">
+      </div>
+      <div class="adv-group">
+        <label>Amortización extra / año <span id="adv-le">€0</span></label>
+        <input type="range" id="adv-e" min="0" max="20000" step="500" value="0" oninput="onAdv()">
+      </div>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-trigger" onclick="toggleTable(this)">
+      <div class="ttitle">Plan de amortización</div>
+      <div class="arrow">▼</div>
+    </div>
+    <div class="table-body" id="table-body">
+      <div class="table-controls">
+        <div style="font-size:11px;color:var(--gray3)" id="table-info"></div>
+        <div class="table-controls-right">
+          <button class="vbtn active" onclick="setView('annual',this)">Anual</button>
+          <button class="vbtn" onclick="setView('monthly',this)">Mensual</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<div id="tt">
+  <div class="tt-yr" id="tt-yr"></div>
+  <div class="tt-row"><span>Valor piso</span><strong id="tt-v"></strong></div>
+  <div class="tt-row"><span>Deuda pendiente</span><strong id="tt-d" style="color:#f87171"></strong></div>
+  <div class="tt-row"><span>Patrimonio neto</span><strong id="tt-e" style="color:#6ee7b7"></strong></div>
+</div>
+
+<script>
+const PROPS = {
+  madrid: {
+    name: "Madrid", tipo: "2,25%", vence: "Oct 2048",
+    capital: 151530.23, capitalInicial: 186642.09,
+    cuota: 709.69, tasa: 0.0225 / 12,
+    valorActual: 340000, startYear: 2026, startMonth: 1,
+  },
+  roma: {
+    name: "Roma — Volturno 31", tipo: "2,95%", vence: "Dic 2054",
+    capital: 265302.81, capitalInicial: 272000,
+    cuota: 1139.44, tasa: 0.0295 / 12,
+    valorActual: 400000, startYear: 2026, startMonth: 2,
+  },
+};
+
+const ADJ = {
+  madrid: { rev: 2.5, extra: 0 },
+  roma:   { rev: 2.5, extra: 0 },
+};
+
+let currentProp = "madrid";
+let tableView   = "annual";
+let chartData   = null;
+let advOpen     = false;
+let tableOpen   = false;
+
+const fE = (n, d=0) => "€" + Math.round(n).toLocaleString("es-ES", {minimumFractionDigits:d, maximumFractionDigits:d});
+const fP = (n, d=1) => n.toLocaleString("es-ES", {minimumFractionDigits:d, maximumFractionDigits:d}) + "%";
+
+function buildAnnual(prop, adj) {
+  let cap   = prop.capital;
+  let valor = prop.valorActual;
+  const rows = [];
+
+  for (let y = prop.startYear; y <= 2060 && cap > 0.5; y++) {
+    const m0 = (y === prop.startYear) ? prop.startMonth : 0;
+    let intY = 0, capY = 0;
+
+    for (let m = m0; m < 12 && cap > 0.5; m++) {
+      const im = cap * prop.tasa;
+      const cm = Math.min(prop.cuota - im, cap);
+      cap = Math.max(0, cap - cm);
+      intY += im; capY += cm;
+    }
+    if (adj.extra > 0 && cap > 0) {
+      const ex = Math.min(adj.extra, cap);
+      cap -= ex; capY += ex;
+    }
+
+    const pend   = Math.max(0, cap);
+    const equity = valor - pend;
+    const pct    = ((prop.capitalInicial - pend) / prop.capitalInicial) * 100;
+    rows.push({ year: y, valor, intY, capY, pendiente: pend, equity, pct });
+    if (cap <= 0.5) break;
+    valor *= (1 + adj.rev / 100);
+  }
+  rows.forEach((r, i) => { r.eqVar = i === 0 ? 0 : r.equity - rows[i-1].equity; });
+  return rows;
+}
+
+function buildMonthly(prop, adj) {
+  let cap   = prop.capital;
+  let valor = prop.valorActual;
+  const rows = [];
+  const mn   = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+  for (let y = prop.startYear; y <= 2060 && cap > 0.5; y++) {
+    const m0 = (y === prop.startYear) ? prop.startMonth : 0;
+    for (let m = m0; m < 12 && cap > 0.5; m++) {
+      const im = cap * prop.tasa;
+      const cm = Math.min(prop.cuota - im, cap);
+      cap = Math.max(0, cap - cm);
+      rows.push({
+        label: mn[m] + " " + y, year: y,
+        intM: im, capM: cm,
+        pendiente: cap, equity: valor - cap,
+        pct: ((prop.capitalInicial - cap) / prop.capitalInicial) * 100, valor,
+      });
+    }
+    valor *= (1 + adj.rev / 100);
+  }
+  return rows;
+}
+
+function buildTotal() {
+  const r1   = buildAnnual(PROPS.madrid, ADJ.madrid);
+  const r2   = buildAnnual(PROPS.roma,   ADJ.roma);
+  const years = [...new Set([...r1, ...r2].map(r => r.year))].sort((a,b)=>a-b);
+  const rows  = years.map(y => {
+    const a = r1.find(r=>r.year===y) || { valor:0,intY:0,capY:0,pendiente:0,equity:0 };
+    const b = r2.find(r=>r.year===y) || { valor:0,intY:0,capY:0,pendiente:0,equity:0 };
+    return { year:y, valor:a.valor+b.valor, intY:a.intY+b.intY, capY:a.capY+b.capY,
+             pendiente:a.pendiente+b.pendiente, equity:a.equity+b.equity, pct:0 };
+  });
+  rows.forEach((r,i) => { r.eqVar = i===0 ? 0 : r.equity - rows[i-1].equity; });
+  return rows;
+}
+
+function getMilestones(rows) {
+  const ms = []; let f50=false,f75=false,f90=false,fPaid=false;
+  rows.forEach(r => {
+    if (!f50   && r.pct >= 50)      { ms.push({ yr:r.year, lbl:"50% pagado"       }); f50=true;   }
+    if (!f75   && r.pct >= 75)      { ms.push({ yr:r.year, lbl:"75% pagado"       }); f75=true;   }
+    if (!f90   && r.pct >= 90)      { ms.push({ yr:r.year, lbl:"90% pagado"       }); f90=true;   }
+    if (!fPaid && r.pendiente<0.5)  { ms.push({ yr:r.year, lbl:"Hipoteca pagada"  }); fPaid=true; }
+  });
+  return ms;
+}
+
+function drawChart(rows) {
+  const canvas = document.getElementById("main-chart");
+  const dpr    = window.devicePixelRatio || 1;
+  const W      = canvas.offsetWidth;
+  const H      = 340;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  const ctx    = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+
+  const pad = { t:20, r:24, b:38, l:72 };
+  const pW  = W - pad.l - pad.r;
+  const pH  = H - pad.t - pad.b;
+  ctx.clearRect(0, 0, W, H);
+
+  const maxV   = Math.max(...rows.map(r => r.valor)) * 1.08;
+  const n      = rows.length;
+  const slotW  = pW / n;
+  const barW   = Math.max(3, slotW * 0.6);
+  const barOff = (slotW - barW) / 2;
+
+  const xLeft = i => pad.l + i * slotW + barOff;
+  const xMid  = i => pad.l + i * slotW + slotW / 2;
+  const yS    = v => pad.t + pH - (Math.max(0, v) / maxV) * pH;
+
+  const step = maxV > 600000 ? 150000 : maxV > 400000 ? 100000 : 50000;
+  ctx.font = "9px 'Inter',sans-serif"; ctx.textAlign = "right";
+  for (let v = 0; v <= maxV; v += step) {
+    const y = yS(v);
+    ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pW, y); ctx.stroke();
+    ctx.fillStyle = "#bbb";
+    ctx.fillText("€" + (v >= 1e6 ? (v/1e6).toFixed(1)+"M" : (v/1000)+"K"), pad.l - 6, y + 3);
+  }
+  ctx.strokeStyle = "#ccc"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t+pH); ctx.lineTo(pad.l+pW, pad.t+pH); ctx.stroke();
+
+  rows.forEach((r, i) => {
+    const x    = xLeft(i);
+    const baseY = pad.t + pH;
+
+    const eqH = Math.max(0, (r.equity / maxV) * pH);
+    ctx.fillStyle = "rgba(21,100,58,0.10)";
+    ctx.fillRect(x, baseY - eqH, barW, eqH);
+
+    const dH = Math.max(0, (r.pendiente / maxV) * pH);
+    ctx.fillStyle = "rgba(185,28,28,0.10)";
+    ctx.fillRect(x, baseY - eqH - dH, barW, dH);
+  });
+
+  ctx.beginPath();
+  rows.forEach((r, i) => i===0 ? ctx.moveTo(xMid(i), yS(r.valor)) : ctx.lineTo(xMid(i), yS(r.valor)));
+  ctx.strokeStyle = "#0a0a0a"; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
+
+  ctx.beginPath();
+  rows.forEach((r, i) => i===0 ? ctx.moveTo(xMid(i), yS(r.pendiente)) : ctx.lineTo(xMid(i), yS(r.pendiente)));
+  ctx.strokeStyle = "#b91c1c"; ctx.lineWidth = 1.5; ctx.setLineDash([5,4]); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  rows.forEach((r, i) => i===0 ? ctx.moveTo(xMid(i), yS(r.equity)) : ctx.lineTo(xMid(i), yS(r.equity)));
+  ctx.strokeStyle = "#15643a"; ctx.lineWidth = 2; ctx.stroke();
+
+  ctx.strokeStyle = "#999"; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(xMid(0), pad.t); ctx.lineTo(xMid(0), pad.t+pH); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#999"; ctx.font = "bold 8px 'Inter',sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("HOY", xMid(0), pad.t + 11);
+
+  ctx.fillStyle = "#bbb"; ctx.font = "9px 'Inter',sans-serif"; ctx.textAlign = "center";
+  const labelStep = Math.max(1, Math.floor(n / 9));
+  rows.forEach((r, i) => {
+    if (i % labelStep === 0 || i === n - 1)
+      ctx.fillText(r.year, xMid(i), H - 10);
+  });
+
+  canvas._rows  = rows;
+  canvas._xMid  = xMid;
+  canvas._slotW = slotW;
+  canvas._pad   = pad;
+}
+
+const cvs = document.getElementById("main-chart");
+cvs.addEventListener("mousemove", function(e) {
+  const rows = this._rows; if (!rows) return;
+  const rect = this.getBoundingClientRect();
+  const xPx  = (e.clientX - rect.left);
+  const pad  = this._pad;
+  const i    = Math.floor((xPx - pad.l / 1) / (rect.width / rows.length));
+  if (i < 0 || i >= rows.length) { document.getElementById("tt").style.opacity="0"; return; }
+  const r = rows[i];
+  document.getElementById("tt-yr").textContent = r.year + (r.year===2026 ? " — hoy" : "");
+  document.getElementById("tt-v").textContent  = fE(r.valor);
+  document.getElementById("tt-d").textContent  = r.pendiente > 0.5 ? fE(r.pendiente) : "✓ Pagada";
+  document.getElementById("tt-e").textContent  = fE(r.equity);
+  const tt = document.getElementById("tt");
+  tt.style.opacity = "1";
+  tt.style.left    = Math.min(e.clientX + 16, window.innerWidth - 190) + "px";
+  tt.style.top     = Math.max(e.clientY - 80, 10) + "px";
+});
+cvs.addEventListener("mouseleave", () => { document.getElementById("tt").style.opacity = "0"; });
+
+function renderTable(annualRows) {
+  const isTotal = currentProp === "total";
+  const prop    = isTotal ? null : PROPS[currentProp];
+  const adj     = isTotal ? null : ADJ[currentProp];
+
+  if (tableView === "annual") {
+    document.getElementById("thead").innerHTML =
+      ["Año","Valor piso","Intereses","Capital amort.","Deuda pendiente","Patrimonio neto","Variación equity","% pagado"]
+      .map((h,i) => `<th style="${i>0?"text-align:right":""}">${h}</th>`).join("");
+
+    const data   = annualRows;
+    const maxEq  = Math.max(...data.map(r => r.equity));
+    document.getElementById("table-info").textContent =
+      `${data.length} años · ${isTotal ? "Madrid + Roma" : (prop.tipo + " · " + prop.vence)}`;
+
+    document.getElementById("tbody").innerHTML = data.map((r, i) => {
+      const now   = r.year === 2026;
+      const varC  = r.eqVar >= 0 ? "var(--green)" : "var(--red)";
+      const barPx = Math.max(0, Math.round(r.equity / maxEq * 46));
+      return `<tr class="${now ? "now" : ""}">
+        <td>${r.year}${now ? '<span class="pill">HOY</span>' : ""}</td>
+        <td>${fE(r.valor)}</td>
+        <td style="color:var(--red)">${fE(r.intY)}</td>
+        <td>${fE(r.capY)}</td>
+        <td style="color:var(--red)">${r.pendiente > 0.5 ? fE(r.pendiente) : '<span style="color:var(--green)">✓ Pagada</span>'}</td>
+        <td style="color:var(--green);font-weight:600">${fE(r.equity)}</td>
+        <td style="color:${varC}">${i === 0 ? "—" : (r.eqVar >= 0 ? "+" : "") + fE(r.eqVar)}</td>
+        <td>
+          <div class="bar-cell">
+            <div class="mini-track"><div class="mini-fill" style="width:${barPx}px"></div></div>
+            ${r.pct.toFixed(1)}%
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+  } else {
+    document.getElementById("thead").innerHTML =
+      ["Mes","Valor piso","Intereses","Capital amort.","Deuda pendiente","Patrimonio neto","% pagado"]
+      .map((h,i) => `<th style="${i>0?"text-align:right":""}">${h}</th>`).join("");
+
+    const data = (isTotal
+      ? buildMonthly(PROPS.madrid, ADJ.madrid)
+      : buildMonthly(prop, adj)
+    ).slice(0, 60);
+
+    document.getElementById("table-info").textContent = "Primeros 60 meses";
+    document.getElementById("tbody").innerHTML = data.map((r, i) => `
+      <tr class="${i===0?"now":""}">
+        <td>${r.label}${i===0?'<span class="pill">HOY</span>':""}</td>
+        <td>${fE(r.valor)}</td>
+        <td style="color:var(--red)">${fE(r.intM)}</td>
+        <td>${fE(r.capM)}</td>
+        <td style="color:var(--red)">${fE(r.pendiente)}</td>
+        <td style="color:var(--green)">${fE(r.equity)}</td>
+        <td>${r.pct.toFixed(1)}%</td>
+      </tr>`).join("") + `<tr><td colspan="7" style="text-align:center;padding:12px;color:var(--gray3);font-size:10px">
+        60 de ${isTotal?buildMonthly(PROPS.madrid,ADJ.madrid).length:"~"+Math.round(buildMonthly(prop,adj).length)} meses totales — cambia a vista anual para el plan completo
+      </td></tr>`;
+  }
+}
+
+function refresh() {
+  const isTotal = currentProp === "total";
+  const prop    = isTotal ? null : PROPS[currentProp];
+  const adj     = isTotal ? null : ADJ[currentProp];
+
+  const rows = isTotal ? buildTotal() : buildAnnual(prop, adj);
+  chartData  = rows;
+
+  const eq1 = PROPS.madrid.valorActual - PROPS.madrid.capital;
+  const eq2 = PROPS.roma.valorActual   - PROPS.roma.capital;
+  document.getElementById("hdr-total").textContent = fE(eq1 + eq2);
+
+  document.getElementById("chart-title").textContent = isTotal
+    ? "Madrid + Roma — Evolución conjunta"
+    : prop.name + " — Evolución del activo";
+
+  let kpis;
+  if (isTotal) {
+    const r36 = rows.find(r => r.year === 2036);
+    kpis = [
+      { l:"Valor total 2026",       v: fE(PROPS.madrid.valorActual + PROPS.roma.valorActual), sub:"Ambas viviendas",       c:"var(--black)" },
+      { l:"Deuda total pendiente",  v: fE(PROPS.madrid.capital + PROPS.roma.capital),         sub:"Madrid + Roma",         c:"var(--red)"   },
+      { l:"Patrimonio neto hoy",    v: fE(eq1+eq2),                                           sub:"Valor − Deuda",         c:"var(--green)" },
+      { l:"Equity proyectado 2036", v: fE(r36?.equity||0),                                    sub:"A 2,5% revalorización", c:"var(--amber)" },
+      { l:"Cuotas mensuales",       v: fE(PROPS.madrid.cuota+PROPS.roma.cuota),               sub:"€709 + €1.139",         c:"var(--gray2)" },
+    ];
+  } else {
+    const eqHoy = prop.valorActual - prop.capital;
+    const r36   = rows.find(r => r.year === 2036);
+    const tInt  = rows.reduce((s,r) => s+r.intY, 0);
+    kpis = [
+      { l:"Valor vivienda 2026",      v: fE(prop.valorActual), sub:"Valoración actual",          c:"var(--black)" },
+      { l:"Deuda pendiente",          v: fE(prop.capital),     sub:prop.tipo+" · "+prop.vence,   c:"var(--red)"   },
+      { l:"Patrimonio neto hoy",      v: fE(eqHoy),            sub:"Valor − Deuda",               c:"var(--green)" },
+      { l:"Equity proyectado 2036",   v: fE(r36?.equity||0),   sub:"Valor piso: "+fE(r36?.valor||0), c:"var(--amber)"},
+      { l:"Total intereses restantes",v: fE(tInt),             sub:"A tipo "+prop.tipo,           c:"var(--gray2)" },
+    ];
+  }
+
+  document.getElementById("kpi-strip").innerHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="kpi-label">${k.l}</div>
+      <div class="kpi-val" style="color:${k.c}">${k.v}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`).join("");
+
+  const ms = isTotal ? [] : getMilestones(rows);
+  document.getElementById("ms-row").innerHTML = ms.map(m =>
+    `<div class="ms"><div class="ms-yr">${m.yr}</div><div class="ms-lbl">${m.lbl}</div></div>`
+  ).join("");
+
+  if (!isTotal) {
+    document.getElementById("adv-v").value    = prop.valorActual;
+    document.getElementById("adv-lv").textContent = fE(prop.valorActual);
+    document.getElementById("adv-r").value    = adj.rev;
+    document.getElementById("adv-lr").textContent = adj.rev.toFixed(2)+"%";
+    document.getElementById("adv-e").value    = adj.extra;
+    document.getElementById("adv-le").textContent = fE(adj.extra);
+  }
+
+  drawChart(rows);
+  renderTable(rows);
+}
+
+function setProp(p, btn) {
+  currentProp = p;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  btn.classList.add("active");
+  if (p === "total" && advOpen) {
+    document.getElementById("adv-panel").classList.remove("open");
+    document.querySelector(".adv-trigger").classList.remove("open");
+    advOpen = false;
+  }
+  refresh();
+}
+
+function setView(mode, btn) {
+  tableView = mode;
+  document.querySelectorAll(".vbtn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  renderTable(chartData);
+}
+
+function toggleAdv(el) {
+  if (currentProp === "total") return;
+  advOpen = !advOpen;
+  document.getElementById("adv-panel").classList.toggle("open", advOpen);
+  el.classList.toggle("open", advOpen);
+}
+
+function toggleTable(el) {
+  tableOpen = !tableOpen;
+  document.getElementById("table-body").classList.toggle("open", tableOpen);
+  el.classList.toggle("open", tableOpen);
+}
+
+function onAdv() {
+  if (currentProp === "total") return;
+  const prop = PROPS[currentProp], adj = ADJ[currentProp];
+  prop.valorActual = parseFloat(document.getElementById("adv-v").value);
+  adj.rev          = parseFloat(document.getElementById("adv-r").value);
+  adj.extra        = parseFloat(document.getElementById("adv-e").value);
+  document.getElementById("adv-lv").textContent = fE(prop.valorActual);
+  document.getElementById("adv-lr").textContent = adj.rev.toFixed(2)+"%";
+  document.getElementById("adv-le").textContent = fE(adj.extra);
+  refresh();
+}
+
+window.addEventListener("load",   refresh);
+window.addEventListener("resize", () => { if (chartData) drawChart(chartData); });
+</script>
+
+</body>
+</html>
